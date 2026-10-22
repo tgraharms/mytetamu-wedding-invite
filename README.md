@@ -2,7 +2,7 @@
 
 A mobile wedding invitation site I planned and shipped for my own wedding. It takes RSVPs and answers guests' travel questions so they don't have to message us.
 
-**Try the demo:** [demo link goes here] (sample data, nothing you do is saved)
+**Try the demo:** [mytetamu-wedding-invite.vercel.app](https://mytetamu-wedding-invite.vercel.app) (sample data, nothing you do is saved). To see the couple's side, tap "Owner view" in the banner and use the password `demo-password-2026`.
 
 ![The invite's opening screen on a phone: an illustrated couple in a flower garden, their names, the wedding date and a countdown, under a banner that says this is a demo](docs/screenshot.jpg)
 
