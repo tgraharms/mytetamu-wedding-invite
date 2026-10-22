@@ -1,0 +1,79 @@
+---
+import LabLayout from '../../layouts/LabLayout.astro';
+import { BranchPoint } from '../../components/lab/MotionDemo';
+---
+
+<LabLayout title="Combo" tag="Lenis + GSAP + Motion">
+  <section class="lab-section">
+    <p class="lab-eyebrow">Probe 03</p>
+    <h1 class="lab-h" style="font-size:52px">Combination</h1>
+    <p class="lab-p">
+      Lenis drives the scroll, GSAP choreographs against it, and a single Motion
+      island handles the branch. Each tool does only the job it is best at, and
+      React loads for one component instead of the whole page.
+    </p>
+  </section>
+
+  <section id="combo-pin" class="lab-section">
+    <p class="lab-eyebrow">Lenis + GSAP · pinned &amp; scrubbed</p>
+    <h2 class="lab-h">Smoothed scroll</h2>
+    <p class="lab-p">
+      Same pinned scrub as probe 02, but scroll position is interpolated by Lenis
+      first. Flick the page and notice it glides to a stop instead of snapping.
+    </p>
+    <div class="lab-card mt-6" style="position:relative;height:240px;overflow:hidden">
+      <div id="c-ring"
+           style="position:absolute;inset:0;margin:auto;width:120px;height:120px;border-radius:50%;border:1px solid var(--dc-gold)"></div>
+      <p id="c-line"
+         style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--dc-ink-strong)">
+        19 · 09 · 2026
+      </p>
+    </div>
+  </section>
+
+  <section class="lab-section">
+    <!-- The only React on the page. client:load for the same reason as /lab/motion. -->
+    <BranchPoint client:load />
+  </section>
+
+  <section class="lab-section" style="min-height:60svh">
+    <p class="lab-eyebrow">End</p>
+    <h2 class="lab-h">Probe complete</h2>
+    <p class="lab-p"><a href="/lab" style="color:var(--dc-gold-deep)">← back to lab</a></p>
+  </section>
+</LabLayout>
+
+<script>
+  import gsap from 'gsap';
+  import ScrollTrigger from 'gsap/ScrollTrigger';
+  import Lenis from 'lenis';
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (!reduced) {
+    const lenis = new Lenis({ duration: 1.05, smoothWheel: true });
+
+    // Lenis owns the scroll loop, so ScrollTrigger must be told when it moves
+    // and GSAP's ticker must drive Lenis — otherwise the two run on separate
+    // clocks and the pinned section stutters.
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((time) => lenis.raf(time * 1000));
+    gsap.ticker.lagSmoothing(0);
+
+    gsap
+      .timeline({
+        scrollTrigger: {
+          trigger: '#combo-pin',
+          start: 'top top',
+          end: '+=800',
+          pin: true,
+          scrub: 1,
+        },
+      })
+      .from('#c-ring', { scale: 0.4, opacity: 0, duration: 1.2 })
+      .from('#c-line', { opacity: 0, y: 24, duration: 1 }, '<0.3')
+      .to('#c-ring', { rotate: 120, duration: 1.6 }, '<');
+  }
+</script>

@@ -1,0 +1,632 @@
+---
+import LabLayout from '../../layouts/LabLayout.astro';
+
+/**
+ * Probe 05 — self-playing cinematic storyboard.
+ *
+ * No interaction required. A master GSAP timeline moves the guest from one
+ * scene to the next. Every scene is built from three depth planes that move at
+ * different rates, under a fixed atmosphere stack (grade / bloom / vignette /
+ * grain) that spans the whole film.
+ */
+
+const scenes = [
+  {
+    id: 'bismillah',
+    img: '/hero-bg.jpg',
+    grade: 'rgba(28,22,14,0.72)',
+    kind: 'open' as const,
+    lines: ['بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ'],
+    sub: 'Dengan nama Allah',
+  },
+  {
+    id: 'jemputan',
+    img: '/bg-butiran.jpg',
+    grade: 'rgba(40,30,18,0.42)',
+    kind: 'lines' as const,
+    eyebrow: 'Walimatul Urus',
+    lines: ['Dengan penuh kesyukuran,', 'kami menjemput anda', 'ke majlis perkahwinan kami.'],
+  },
+  {
+    id: 'nama',
+    img: '/bg-penutup.jpg',
+    grade: 'rgba(46,34,20,0.36)',
+    kind: 'names' as const,
+    a: 'Zulhairul Ikram',
+    b: 'Shahidatul Aqira',
+  },
+  {
+    id: 'tarikh',
+    img: '/bg-lokasi.jpg',
+    grade: 'rgba(30,34,30,0.44)',
+    kind: 'date' as const,
+    big: '19 · 09 · 2026',
+    eyebrow: 'Sabtu',
+    sub: 'Elegant Glam Hall, Temerloh',
+  },
+  {
+    id: 'penutup',
+    img: '/bg-aktiviti.jpg',
+    grade: 'rgba(52,38,20,0.3)',
+    kind: 'close' as const,
+    lines: ['Semoga hadir', 'menyempurnakan majlis kami.'],
+  },
+];
+---
+
+<LabLayout title="Cinema" tag="self-playing storyboard">
+  <div class="film" id="film">
+    <!-- ── scenes ─────────────────────────────────────────────── -->
+    {
+      scenes.map((s, i) => (
+        <section class="scene" data-scene={i} id={`sc-${s.id}`}>
+          {/* far plane — drifts slowest, softly out of focus */}
+          <div class="plane plane--bg" style={`background-image:url(${s.img})`} />
+          {/* mid plane — atmospheric wash tinting this scene */}
+          <div class="plane plane--wash" style={`background:radial-gradient(120% 80% at 50% 40%, transparent 30%, ${s.grade} 100%)`} />
+          {/* contrast bed — sits directly behind the type so the subject always
+              reads, whatever the artwork underneath is doing */}
+          <div class="plane plane--scrim" />
+          {/* near plane — bokeh, sits in front of the subject */}
+          <div class="plane plane--fg" data-fg />
+
+          {/* subject */}
+          <div class="plane plane--subject">
+            <div class="subject">
+              {s.kind === 'open' && (
+                <>
+                  <div class="mask"><span class="line bismillah">{s.lines[0]}</span></div>
+                  <div class="rule"><span data-rule /></div>
+                  <div class="mask"><span class="line tiny">{s.sub}</span></div>
+                </>
+              )}
+
+              {s.kind === 'lines' && (
+                <>
+                  <div class="mask"><span class="line eyebrow">{s.eyebrow}</span></div>
+                  <div class="rule"><span data-rule /></div>
+                  {s.lines!.map((l) => (
+                    <div class="mask"><span class="line body">{l}</span></div>
+                  ))}
+                </>
+              )}
+
+              {s.kind === 'names' && (
+                <>
+                  <div class="mask"><span class="line display" data-sweep>{s.a}</span></div>
+                  <div class="amp"><span>&amp;</span></div>
+                  <div class="mask"><span class="line display" data-sweep>{s.b}</span></div>
+                </>
+              )}
+
+              {s.kind === 'date' && (
+                <>
+                  <div class="mask"><span class="line eyebrow">{s.eyebrow}</span></div>
+                  <div class="mask"><span class="line big" data-track>{s.big}</span></div>
+                  <div class="rule"><span data-rule /></div>
+                  <div class="mask"><span class="line tiny">{s.sub}</span></div>
+                </>
+              )}
+
+              {s.kind === 'close' && (
+                <>
+                  {s.lines!.map((l) => (
+                    <div class="mask"><span class="line body">{l}</span></div>
+                  ))}
+                  <div class="rule"><span data-rule /></div>
+                  <div class="mask"><span class="line tiny">Zulhairul &amp; Aqira · 2026</span></div>
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+      ))
+    }
+
+    <!-- ── atmosphere, fixed above every scene ─────────────────── -->
+    <div class="atmos atmos--bloom" id="bloom"></div>
+    <div class="atmos atmos--vig" id="vig"></div>
+    <div class="atmos atmos--grain" id="grain"></div>
+    <div class="atmos atmos--black" id="blackout"></div>
+
+    <!-- ── minimal chrome ─────────────────────────────────────── -->
+    <div class="chrome">
+      <div class="ticks">
+        {scenes.map((_, i) => <span class="tick" data-tick={i}><i></i></span>)}
+      </div>
+      <button id="replay" type="button" class="replay" aria-label="Main semula">↻</button>
+    </div>
+  </div>
+
+  <p class="lab-p" style="padding:24px;font-size:13px">
+    Auto-plays on load, no input needed. Tap anywhere to pause/resume, ↻ to
+    replay. <a href="/lab" style="color:var(--dc-gold-deep)">← back to lab</a>
+  </p>
+</LabLayout>
+
+<style is:global>
+  /* ── stage ─────────────────────────────────────────────────── */
+  .film {
+    position: relative;
+    width: 100%;
+    height: 100svh;
+    overflow: hidden;
+    background: #0b0906;
+    /* real perspective so plane depth is projected, not faked with scale */
+    perspective: 1000px;
+    perspective-origin: 50% 45%;
+    isolation: isolate;
+  }
+
+  .scene {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+    transform-style: preserve-3d;
+    will-change: opacity, transform;
+  }
+
+  .plane {
+    position: absolute;
+    inset: -8%; /* overscan so parallax never exposes an edge */
+    background-size: cover;
+    background-position: center;
+    backface-visibility: hidden;
+  }
+
+  /* Far plane: pushed back in Z. Only lightly softened — depth here comes from
+     parallax separation and scale, not from blurring everything into mush.
+     Over-blurring the background flattens the image instead of deepening it. */
+  .plane--bg {
+    transform: translateZ(-220px) scale(1.28);
+    filter: blur(1.2px) saturate(0.86) brightness(0.82);
+  }
+  .plane--wash {
+    transform: translateZ(-120px) scale(1.14);
+  }
+  /* Contrast bed. Darkest through the horizontal band the type occupies so the
+     subject has somewhere to sit, feathered to nothing top and bottom. */
+  .plane--scrim {
+    transform: translateZ(-60px) scale(1.08);
+    background:
+      linear-gradient(
+        180deg,
+        rgba(12, 9, 6, 0.5) 0%,
+        rgba(12, 9, 6, 0.16) 22%,
+        rgba(10, 7, 4, 0.68) 44%,
+        rgba(10, 7, 4, 0.72) 58%,
+        rgba(12, 9, 6, 0.2) 80%,
+        rgba(12, 9, 6, 0.55) 100%
+      );
+  }
+  /* Near plane: pulled forward, heavily defocused. Foreground haze, not a veil
+     over the subject — keep it faint or it fogs the whole frame. */
+  .plane--fg {
+    transform: translateZ(90px) scale(0.92);
+    filter: blur(9px);
+    opacity: 0.38;
+  }
+  .plane--subject {
+    display: grid;
+    place-items: center;
+    padding: 0 30px;
+    transform: translateZ(0);
+  }
+
+  .subject {
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    /* Soft dark halo under everything in the subject plane. Cheap, and it keeps
+       type legible over the brightest part of any artwork. */
+    text-shadow:
+      0 1px 2px rgba(8, 5, 3, 0.55),
+      0 8px 30px rgba(8, 5, 3, 0.7);
+  }
+
+  /* ── type ──────────────────────────────────────────────────── */
+  .mask {
+    display: block;
+    overflow: hidden;
+    padding: 0.08em 0;
+  }
+  .line {
+    display: block;
+    will-change: transform;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.34em;
+    text-transform: uppercase;
+    color: rgba(255, 246, 230, 0.72);
+  }
+  .tiny {
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    color: rgba(255, 246, 230, 0.66);
+  }
+  .body {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 25px;
+    line-height: 1.45;
+    color: rgba(255, 249, 238, 0.94);
+  }
+  .display {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(34px, 11vw, 46px);
+    line-height: 1.16;
+    color: #fffaf0;
+    position: relative;
+  }
+  .big {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(30px, 9.5vw, 40px);
+    color: #fffaf0;
+    letter-spacing: 0.02em;
+  }
+  .bismillah {
+    font-family: 'Amiri Quran', 'Cormorant Garamond', serif;
+    font-size: clamp(26px, 8.5vw, 36px);
+    line-height: 2;
+    color: #fdf3e0;
+  }
+  .amp {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 22px;
+    color: var(--dc-gold-soft);
+    margin: 6px 0;
+    opacity: 0;
+  }
+  .rule {
+    height: 1px;
+    margin: 16px auto;
+    width: 190px;
+    max-width: 62%;
+    overflow: hidden;
+  }
+  .rule span {
+    display: block;
+    height: 1px;
+    width: 100%;
+    transform-origin: 50% 50%;
+    background: linear-gradient(90deg, transparent, var(--dc-gold-soft), transparent);
+  }
+
+  /* light sweep that rakes across the names once */
+  [data-sweep]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 38%,
+      rgba(255, 255, 255, 0.55) 50%,
+      transparent 62%
+    );
+    transform: translateX(var(--sweep, -120%));
+    mix-blend-mode: overlay;
+  }
+
+  /* ── atmosphere ────────────────────────────────────────────── */
+  .atmos {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .atmos--bloom {
+    background: radial-gradient(
+      60% 42% at 50% 34%,
+      rgba(255, 226, 168, 0.4),
+      transparent 70%
+    );
+    mix-blend-mode: screen;
+    opacity: 0;
+  }
+  .atmos--vig {
+    box-shadow: inset 0 0 190px 60px rgba(10, 7, 4, 0.82);
+  }
+  .atmos--grain {
+    opacity: 0.16;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    /* oversized + transform-animated so the grain crawls without repainting */
+    inset: -60px;
+    will-change: transform;
+  }
+  .atmos--black {
+    background: #000;
+    opacity: 1;
+  }
+
+  .bokeh {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 240, 210, 0.95), rgba(255, 226, 170, 0));
+    will-change: transform;
+  }
+
+  /* ── chrome ────────────────────────────────────────────────── */
+  .chrome {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    z-index: 5;
+  }
+  .ticks {
+    display: flex;
+    gap: 6px;
+  }
+  .tick {
+    width: 26px;
+    height: 2px;
+    background: rgba(255, 240, 214, 0.24);
+    overflow: hidden;
+    border-radius: 2px;
+  }
+  .tick i {
+    display: block;
+    height: 100%;
+    width: 100%;
+    background: var(--dc-gold-soft);
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+  }
+  .replay {
+    position: absolute;
+    right: 16px;
+    bottom: -2px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 240, 214, 0.3);
+    background: rgba(20, 15, 10, 0.4);
+    color: rgba(255, 240, 214, 0.8);
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scene { transition: none; }
+  }
+</style>
+
+<script>
+  import gsap from 'gsap';
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const film = document.getElementById('film')!;
+  const scenes = [...film.querySelectorAll<HTMLElement>('.scene')];
+
+  /* ── foreground bokeh ─────────────────────────────────────────
+     A handful per scene. Count kept low deliberately: each one is a
+     composited layer and this has to survive an older phone.          */
+  const BOKEH_PER_SCENE = 7;
+  film.querySelectorAll<HTMLElement>('[data-fg]').forEach((fg, si) => {
+    for (let i = 0; i < BOKEH_PER_SCENE; i++) {
+      const d = document.createElement('span');
+      d.className = 'bokeh';
+      // deterministic pseudo-random so scenes differ but replays match
+      const r = (n: number) => ((Math.sin((si + 1) * 12.9898 + (i + 1) * n) * 43758.5453) % 1 + 1) % 1;
+      const size = 14 + r(3) * 46;
+      d.style.width = `${size}px`;
+      d.style.height = `${size}px`;
+      d.style.left = `${r(7) * 100}%`;
+      d.style.top = `${r(11) * 100}%`;
+      d.style.opacity = `${0.25 + r(13) * 0.5}`;
+      fg.appendChild(d);
+    }
+  });
+
+  if (reduced) {
+    // Show the final scene, no motion.
+    gsap.set('#blackout', { opacity: 0 });
+    gsap.set(scenes, { opacity: 0, visibility: 'hidden' });
+    gsap.set(scenes[scenes.length - 1]!, { opacity: 1, visibility: 'visible' });
+    gsap.set('.line, .amp, .rule span', { clearProps: 'all' });
+  } else {
+    /* Scene rhythm. SCENE is how long a scene owns the frame; XFADE is how much
+       of that overlaps its neighbour. Cinematic pacing is slow — these are
+       deliberately far longer than UI-animation durations. */
+    const SCENE = 7.2;
+    const XFADE = 1.9;
+
+    /* ── per-scene sub-timeline ───────────────────────────────── */
+    function buildScene(sc: HTMLElement, i: number) {
+      const tl = gsap.timeline();
+      const bg = sc.querySelector('.plane--bg');
+      const wash = sc.querySelector('.plane--wash');
+      const fg = sc.querySelector('.plane--fg');
+      const subject = sc.querySelector('.plane--subject');
+      const lines = sc.querySelectorAll('.line');
+      const rules = sc.querySelectorAll('[data-rule]');
+      const amp = sc.querySelector('.amp');
+      const sweeps = sc.querySelectorAll('[data-sweep]');
+      const bokeh = sc.querySelectorAll('.bokeh');
+
+      // Bring the scene in: subtle push-in dissolve rather than a flat fade.
+      tl.set(sc, { visibility: 'visible' })
+        .fromTo(sc, { opacity: 0 }, { opacity: 1, duration: XFADE, ease: 'power1.inOut' }, 0)
+        .fromTo(sc, { scale: 1.05 }, { scale: 1, duration: SCENE, ease: 'none' }, 0);
+
+      /* Ken Burns — each plane drifts at its own rate for the whole scene.
+         Direction alternates so consecutive scenes don't feel repetitive. */
+      const dir = i % 2 === 0 ? 1 : -1;
+      tl.fromTo(
+        bg,
+        { xPercent: -2 * dir, yPercent: 1.5, scale: 1.28 },
+        { xPercent: 2 * dir, yPercent: -1.5, scale: 1.36, duration: SCENE, ease: 'none' },
+        0,
+      )
+        .fromTo(
+          wash,
+          { xPercent: -1 * dir },
+          { xPercent: 1 * dir, duration: SCENE, ease: 'none' },
+          0,
+        )
+        // near plane travels furthest → parallax separation
+        .fromTo(
+          fg,
+          { xPercent: 5 * dir, yPercent: -2 },
+          { xPercent: -5 * dir, yPercent: 2, duration: SCENE, ease: 'none' },
+          0,
+        )
+        .fromTo(
+          subject,
+          { yPercent: 2.2 },
+          { yPercent: -2.2, duration: SCENE, ease: 'none' },
+          0,
+        );
+
+      // Bokeh breathe independently of the plane drift.
+      bokeh.forEach((b, bi) => {
+        tl.to(
+          b,
+          {
+            xPercent: (bi % 2 ? 1 : -1) * (10 + bi * 3),
+            yPercent: -14 - bi * 2,
+            duration: SCENE,
+            ease: 'sine.inOut',
+          },
+          0,
+        );
+      });
+
+      /* Subject reveal — lines wipe up out of their mask. This is the beat
+         that makes it read as designed rather than as a fade. */
+      // Hold the reveal until the dissolve has essentially resolved, so the
+      // type writes onto a settled frame instead of through a fading one.
+      const IN = XFADE * 0.8;
+
+      tl.fromTo(
+        lines,
+        { yPercent: 118 },
+        { yPercent: 0, duration: 1.25, stagger: 0.14, ease: 'power3.out' },
+        IN,
+      );
+
+      if (rules.length) {
+        tl.fromTo(
+          rules,
+          { scaleX: 0 },
+          { scaleX: 1, duration: 1.4, ease: 'power2.inOut' },
+          IN + 0.4,
+        );
+      }
+      if (amp) {
+        tl.fromTo(amp, { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.9 }, IN + 0.7);
+      }
+      // tracking-in on the date
+      const track = sc.querySelector('[data-track]');
+      if (track) {
+        tl.fromTo(
+          track,
+          { letterSpacing: '0.34em', opacity: 0.4 },
+          { letterSpacing: '0.02em', opacity: 1, duration: 1.6, ease: 'power2.out' },
+          IN + 0.15,
+        );
+      }
+      // Light rake across the names. GSAP animates the custom property the
+      // ::after reads, so the sweep is one composited transform.
+      if (sweeps.length) {
+        tl.fromTo(
+          sweeps,
+          { '--sweep': '-120%' },
+          { '--sweep': '140%', duration: 1.6, ease: 'power2.inOut', stagger: 0.25 },
+          IN + 1.1,
+        );
+      }
+
+      // Pad the child to exactly SCENE so master timing stays predictable.
+      tl.set({}, {}, SCENE);
+      return tl;
+    }
+
+    /* ── master ───────────────────────────────────────────────────
+       Explicit absolute positions. Relative labels ('>', '-=1.7') compound as
+       the timeline grows and left a black gap between scenes — every position
+       below is computed from STEP so the dissolves genuinely overlap.        */
+    const STEP = SCENE - XFADE; // when the next scene starts
+    const TOTAL = STEP * (scenes.length - 1) + SCENE;
+
+    const master = gsap.timeline({ paused: true });
+
+    // open from black
+    master.to('#blackout', { opacity: 0, duration: 2.2, ease: 'power2.inOut' }, 0.2);
+    master.fromTo('#bloom', { opacity: 0 }, { opacity: 1, duration: 2.4, ease: 'power1.out' }, 0.4);
+
+    scenes.forEach((sc, i) => {
+      const t = i * STEP;
+      master.add(buildScene(sc, i), t);
+      master.fromTo(
+        `[data-tick="${i}"] i`,
+        { scaleX: 0 },
+        { scaleX: 1, duration: STEP, ease: 'none' },
+        t,
+      );
+      if (i < scenes.length - 1) {
+        /* Deliberately NOT fading this scene out. Scenes stack in DOM order, so
+           the next one is painted on top — cross-fading both at once composites
+           two half-opacity layers over black and the frame goes muddy. Instead
+           this one holds at full opacity underneath and is simply hidden once
+           the incoming scene has reached opacity 1. */
+        master.set(sc, { visibility: 'hidden' }, t + STEP + XFADE);
+
+        /* The subject does leave early, though. Letting two sets of type dissolve
+           through each other is unreadable — the outgoing text clears out before
+           the incoming text writes on. */
+        /* Target .subject, not .plane--subject — the plane already owns a
+           yPercent drift tween and animating the same property on it from two
+           tweens makes it judder. */
+        master.to(
+          sc.querySelector('.subject'),
+          { opacity: 0, yPercent: -5, duration: XFADE * 0.55, ease: 'power2.in' },
+          t + STEP,
+        );
+      }
+    });
+
+    // breathing vignette across the whole film
+    master.fromTo(
+      '#vig',
+      { opacity: 0.86 },
+      { opacity: 1, duration: TOTAL / 2, yoyo: true, repeat: 1, ease: 'sine.inOut' },
+      0,
+    );
+
+    // grain crawl — transform only, never repaints the noise
+    gsap.to('#grain', {
+      x: 22,
+      y: -18,
+      duration: 0.5,
+      repeat: -1,
+      yoyo: true,
+      ease: 'none',
+    });
+
+    master.play();
+
+    /* ── minimal chrome ───────────────────────────────────────── */
+    let paused = false;
+    film.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('#replay')) return;
+      paused = !paused;
+      paused ? master.pause() : master.play();
+    });
+    document.getElementById('replay')?.addEventListener('click', () => {
+      gsap.set('[data-tick] i', { scaleX: 0 });
+      paused = false;
+      master.restart();
+    });
+
+    // Expose for measurement from the harness.
+    (window as any).__film = master;
+  }
+</script>

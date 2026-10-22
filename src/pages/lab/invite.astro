@@ -1,0 +1,325 @@
+---
+/**
+ * Probe 06 — the real homepage, with an authored arrival.
+ *
+ * Same components as src/pages/index.astro, same order. Nothing in
+ * src/components is touched: this is a drop-in layer that targets the markup
+ * those components already emit (section > h2.dc-heading > .dc-divider >
+ * .dc-card). If we keep it, it lands on the real page as one script.
+ *
+ * ?anim=bold (default) | subtle | off  — switch intensity from the chrome.
+ */
+import Layout from '../../layouts/Layout.astro';
+import { site } from '../../content/site';
+import Hero from '../../components/Hero.astro';
+import ButiranMajlis from '../../components/ButiranMajlis.astro';
+import SahkanKehadiran from '../../components/SahkanKehadiran.astro';
+import CaraKeSana from '../../components/CaraKeSana.astro';
+import SementaraDiPahang from '../../components/SementaraDiPahang.astro';
+import Penutup from '../../components/Penutup.astro';
+import QuickNav from '../../components/QuickNav.astro';
+import MuzikLatar from '../../components/MuzikLatar.astro';
+---
+
+<Layout title={`${site.meta.title} · Lab`} description={site.meta.description} noindex>
+  <script is:inline>
+    (function () {
+      var mode = new URLSearchParams(location.search).get('anim') || 'bold';
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.__animMode = reduce ? 'off' : mode;
+      if (window.__animMode !== 'off') {
+        // `.anim` is the only thing hiding reveal targets, so it must never
+        // outlive a failed script. Failsafe drops it if nothing signals ready.
+        document.documentElement.classList.add('anim');
+        window.__animReady = false;
+        setTimeout(function () {
+          if (!window.__animReady) document.documentElement.classList.remove('anim');
+        }, 4000);
+      }
+    })();
+  </script>
+
+  <div class="scroll-thread"><i id="thread"></i></div>
+
+  <QuickNav />
+  <MuzikLatar />
+
+  <main class="dc-shell lab-invite pb-24">
+    <Hero />
+    <ButiranMajlis />
+    <SahkanKehadiran />
+    <CaraKeSana />
+    <SementaraDiPahang />
+    <Penutup />
+  </main>
+
+  <div class="lab-chrome">
+    <a href="/lab">← lab</a>
+    <span class="sep"></span>
+    <a href="?anim=bold" data-m="bold">bold</a>
+    <a href="?anim=subtle" data-m="subtle">subtle</a>
+    <a href="?anim=off" data-m="off">off</a>
+    <span class="sep"></span>
+    <span>fps <b id="fps-now">–</b></span>
+    <span>jank <b id="fps-jank">–</b></span>
+  </div>
+</Layout>
+
+<style is:global>
+  /* ── hidden states, only ever active alongside .anim ──────────── */
+  .anim .lab-invite [data-rise] { opacity: 0; }
+  .anim .lab-invite [data-draw] { opacity: 0; }
+  .anim .lab-invite [data-pop] { opacity: 0; }
+
+  /* Word masks built at runtime from each section heading. Inline-block with
+     overflow hidden gives each word its own little stage to climb out of. */
+  .lab-invite .w-mask {
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: bottom;
+    /* descenders in Cormorant would otherwise get clipped by the mask */
+    padding-bottom: 0.12em;
+    margin-bottom: -0.12em;
+  }
+  .lab-invite .w-in {
+    display: inline-block;
+    will-change: transform;
+  }
+
+  .scroll-thread {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    z-index: 60;
+    pointer-events: none;
+  }
+  .scroll-thread i {
+    display: block;
+    height: 100%;
+    width: 100%;
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+    background: linear-gradient(90deg, var(--dc-gold-soft), var(--dc-gold));
+  }
+
+  .lab-chrome {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 6px;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(28, 24, 19, 0.88);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 244, 224, 0.8);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .lab-chrome a { color: var(--dc-gold-soft); text-decoration: none; }
+  .lab-chrome a[aria-current='true'] { color: #fff; text-decoration: underline; }
+  .lab-chrome b { color: #fff; }
+  .lab-chrome .sep { width: 1px; height: 10px; background: rgba(255, 244, 224, 0.25); }
+</style>
+
+<script>
+  import { animate, inView, press, scroll, stagger } from 'motion';
+
+  const root = document.querySelector<HTMLElement>('.lab-invite');
+  const MODE = (window as any).__animMode as 'bold' | 'subtle' | 'off';
+
+  /* ── frame meter ──────────────────────────────────────────────── */
+  (() => {
+    let last = performance.now(), acc = 0, frames = 0, jank = 0;
+    const now = document.getElementById('fps-now');
+    const jk = document.getElementById('fps-jank');
+    const tick = (t: number) => {
+      const dt = t - last; last = t; acc += dt; frames++;
+      if (dt > 50) jank++;
+      if (acc >= 500) {
+        if (now) now.textContent = String(Math.round((frames * 1000) / acc));
+        if (jk) jk.textContent = String(jank);
+        acc = 0; frames = 0;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })();
+
+  document
+    .querySelectorAll<HTMLElement>('.lab-chrome a[data-m]')
+    .forEach((a) => { if (a.dataset.m === MODE) a.setAttribute('aria-current', 'true'); });
+
+  /* Presets. `bold` is the one worth judging — the previous pass sat at
+     roughly `subtle` and read as no change at all. */
+  const P = {
+    bold:   { rise: 40, blur: 12, word: 0.055, dur: 1.0, hold: 0.5 },
+    subtle: { rise: 18, blur: 0,  word: 0.028, dur: 0.7, hold: 0.35 },
+  }[MODE === 'subtle' ? 'subtle' : 'bold'];
+
+  const EASE = [0.16, 1, 0.3, 1] as const; // long tail, no overshoot
+
+  /** Rebuild a heading as per-word masks so the words can climb out. */
+  function splitWords(el: HTMLElement): HTMLElement[] {
+    const text = (el.textContent || '').trim();
+    if (!text) return [];
+    el.textContent = '';
+    el.setAttribute('aria-label', text);
+    const inners: HTMLElement[] = [];
+    text.split(/\s+/).forEach((w, i, arr) => {
+      const mask = document.createElement('span');
+      mask.className = 'w-mask';
+      mask.setAttribute('aria-hidden', 'true');
+      const inner = document.createElement('span');
+      inner.className = 'w-in';
+      inner.textContent = w;
+      mask.appendChild(inner);
+      el.appendChild(mask);
+      if (i < arr.length - 1) el.appendChild(document.createTextNode(' '));
+      inners.push(inner);
+    });
+    return inners;
+  }
+
+  if (root && MODE !== 'off') try {
+    /* ── scroll progress ───────────────────────────────────────── */
+    const thread = document.getElementById('thread');
+    if (thread) scroll(animate(thread, { scaleX: [0, 1] }, { ease: 'linear' }));
+
+    const sections = [...root.querySelectorAll<HTMLElement>('section')].filter(
+      (s) => s.id !== 'hero',
+    );
+
+    sections.forEach((sec) => {
+      const h2 = sec.querySelector<HTMLElement>('h2');
+      const divider = sec.querySelector<HTMLElement>('.dc-divider');
+      const diamond = divider?.querySelector<HTMLElement>('span') ?? null;
+      const card = sec.querySelector<HTMLElement>('.dc-card');
+      const column = (card ?? divider?.parentElement ?? sec) as HTMLElement;
+
+      const all = card
+        ? [...card.children]
+        : [...column.children].filter((el) => el !== h2 && el !== divider);
+
+      /* Actions arrive last, on their own beat. The components wrap them in a
+         flex container, so match children that *contain* buttons rather than
+         children that are buttons — an earlier pass matched nothing at all. */
+      const BTN = '.btn, .btn-outline, a[class*=btn], button';
+      const groups = all.filter((el) => el.matches(BTN) || el.querySelector(BTN));
+      const buttons = groups.flatMap((g) =>
+        g.matches(BTN) ? [g as HTMLElement] : ([...g.querySelectorAll<HTMLElement>(BTN)]),
+      );
+      const blocks = all.filter((el) => !groups.includes(el)) as HTMLElement[];
+
+      const words = h2 ? splitWords(h2) : [];
+      if (h2) h2.setAttribute('data-rise', '');
+      if (divider) divider.setAttribute('data-draw', '');
+      blocks.forEach((el) => el.setAttribute('data-rise', ''));
+      buttons.forEach((el) => el.setAttribute('data-pop', ''));
+
+      /* The diamond is a square that CSS rotates 45deg. Its own animation is
+         delayed behind the rule, so without seeding the start state it would
+         sit there at full size and then snap to nothing. Seed it now. */
+      if (diamond) animate(diamond, { scale: 0, rotate: 0 }, { duration: 0 });
+      if (words.length) animate(words, { y: '115%' }, { duration: 0 });
+
+      inView(
+        sec,
+        () => {
+          /* 1. Heading — words climb out of their masks, letter-spacing
+                settles from wide. This is the beat that reads as authored. */
+          if (h2) {
+            animate(h2, { opacity: 1 }, { duration: 0.01 });
+            animate(
+              h2,
+              { letterSpacing: ['0.14em', '0em'] },
+              { duration: P.dur * 1.6, ease: EASE },
+            );
+            animate(
+              words,
+              { y: '0%' },
+              { duration: P.dur, ease: EASE, delay: stagger(P.word) },
+            );
+          }
+
+          /* 2. Rule draws open from the centre, diamond lands after. */
+          if (divider) {
+            animate(
+              divider,
+              { opacity: [0, 1], scaleX: [0, 1] },
+              { duration: P.dur * 1.1, ease: EASE, delay: P.hold * 0.5 },
+            );
+          }
+          if (diamond) {
+            animate(
+              diamond,
+              { scale: [0, 1], rotate: [0, 45] },
+              { duration: P.dur * 0.7, ease: [0.34, 1.4, 0.5, 1], delay: P.hold * 1.1 },
+            );
+          }
+
+          /* 3. Body — rises and racks into focus. The blur is what separates
+                this from a plain CSS fade; it reads as depth, not opacity. */
+          if (blocks.length) {
+            animate(
+              blocks,
+              P.blur
+                ? { opacity: [0, 1], y: [P.rise, 0], filter: [`blur(${P.blur}px)`, 'blur(0px)'] }
+                : { opacity: [0, 1], y: [P.rise, 0] },
+              {
+                duration: P.dur * 1.05,
+                ease: EASE,
+                delay: stagger(0.09, { startDelay: P.hold }),
+              },
+            );
+          }
+
+          /* 4. Actions last, with a small pop so they read as arriving. */
+          if (buttons.length) {
+            animate(
+              buttons,
+              { opacity: [0, 1], y: [P.rise * 0.5, 0], scale: [0.94, 1] },
+              {
+                duration: P.dur * 0.8,
+                ease: [0.34, 1.35, 0.5, 1],
+                delay: stagger(0.08, { startDelay: P.hold + 0.35 }),
+              },
+            );
+          }
+        },
+        { amount: 0.25 },
+      );
+
+      /* Depth: the frosted card drifts against scroll. Separate element from
+         every reveal target, so nothing fights over `transform`. */
+      if (card) {
+        scroll(animate(card, { y: [P.rise * 0.6, -P.rise * 0.6] }, { ease: 'linear' }), {
+          target: sec,
+          offset: ['start end', 'end start'],
+        });
+      }
+    });
+
+    /* Press feedback everywhere. */
+    root.querySelectorAll<HTMLElement>('.btn, .btn-outline, button, a[class*=btn]').forEach(
+      (el) => {
+        press(el, () => {
+          animate(el, { scale: 0.965 }, { duration: 0.12, ease: 'easeOut' });
+          return () => animate(el, { scale: 1 }, { duration: 0.3, ease: [0.34, 1.4, 0.5, 1] });
+        });
+      },
+    );
+
+    (window as any).__animReady = true;
+  } catch (err) {
+    document.documentElement.classList.remove('anim');
+    console.error('[lab/invite] motion layer failed, showing page unanimated', err);
+  }
+</script>

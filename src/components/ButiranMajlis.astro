@@ -1,0 +1,46 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+import { googleCalendarUrl } from '../lib/links';
+---
+
+<Section id="butiran" title="Butiran Majlis" bg="bg-butiran" card>
+  <div class="text-center">
+    <p class="text-[11px] font-bold uppercase tracking-[0.24em] text-[#a08f74]">Tarikh</p>
+    <p class="font-display mt-2 text-2xl font-semibold text-[#3b362f]">
+      {site.event.dayName}, {site.event.displayDate}
+    </p>
+    <p class="mt-1 text-sm text-[#6b655c]">{site.event.displayTime}</p>
+
+    <div class="dc-rule mx-auto my-6" aria-hidden="true"></div>
+
+    <p class="text-[11px] font-bold uppercase tracking-[0.24em] text-[#a08f74]">Lokasi</p>
+    <p class="font-display mt-2 text-xl font-semibold text-[#3b362f]">{site.venue.name}</p>
+    <p class="mt-1 text-sm leading-relaxed text-[#6b655c]">{site.venue.address}</p>
+  </div>
+  <div class="mt-7 flex flex-col items-stretch gap-3">
+    <a
+      href={googleCalendarUrl()}
+      target="_blank"
+      rel="noopener"
+      class="btn w-full items-center gap-2"
+    >
+      <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M3 10h18M8 3v4M16 3v4" />
+      </svg>
+      Google Calendar
+    </a>
+    <a
+      href="/majlis.ics"
+      download="majlis.ics"
+      class="btn-outline w-full items-center gap-2"
+    >
+      <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M3 10h18M8 3v4M16 3v4M9 15.5l2 2 4-4" />
+      </svg>
+      Kalendar iPhone / Apple
+    </a>
+  </div>
+</Section>

@@ -1,0 +1,243 @@
+---
+import LabLayout from '../../layouts/LabLayout.astro';
+---
+
+<LabLayout title="GSAP" tag="GSAP + ScrollTrigger">
+  <section class="lab-section">
+    <p class="lab-eyebrow">Probe 02</p>
+    <h1 class="lab-h" style="font-size:52px">GSAP</h1>
+    <p class="lab-p">
+      No React on this page at all — plain DOM plus GSAP. Animation is a
+      <em>timeline</em> you author once and then drive, either by time or by
+      scroll position.
+    </p>
+  </section>
+
+  <!-- ── Scroll choreography: pinned + scrubbed ──────────────────── -->
+  <section id="pin-wrap" class="lab-section" style="min-height:100svh">
+    <p class="lab-eyebrow">Scroll-triggered · pinned &amp; scrubbed</p>
+    <h2 class="lab-h">Satu babak</h2>
+    <p class="lab-p">
+      This section pins to the viewport and the sequence below scrubs against
+      scroll distance. Scroll up and it runs exactly backwards.
+    </p>
+
+    <div class="lab-card mt-6" style="position:relative;height:260px;overflow:hidden">
+      <div id="scene-ring"
+           style="position:absolute;inset:0;margin:auto;width:130px;height:130px;border-radius:50%;border:1px solid var(--dc-gold)"></div>
+      <p id="scene-a" class="lab-eyebrow" style="position:absolute;top:26px;left:0;right:0;text-align:center">
+        19 September 2026
+      </p>
+      <p id="scene-b"
+         style="position:absolute;top:0;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:36px;color:var(--dc-ink-strong)">
+        Zulhairul
+      </p>
+      <p id="scene-c"
+         style="position:absolute;bottom:26px;left:0;right:0;text-align:center;font-family:'Cormorant Garamond',serif;font-size:36px;color:var(--dc-ink-strong)">
+        Shahidatul
+      </p>
+    </div>
+    <p class="lab-p" style="font-size:13px">
+      One timeline, four tweens, <code>scrub: 1</code> for a little inertia.
+    </p>
+  </section>
+
+  <!-- ── Tap-triggered timeline ──────────────────────────────────── -->
+  <section class="lab-section">
+    <p class="lab-eyebrow">Tap-triggered</p>
+    <h2 class="lab-h">Buka jemputan</h2>
+    <div class="lab-card mt-6" style="overflow:hidden">
+      <div id="fold" style="display:grid;gap:10px">
+        <p class="lab-fold-line lab-p" style="margin-top:0">Dengan penuh kesyukuran,</p>
+        <p class="lab-fold-line lab-p" style="margin-top:0">kami menjemput anda</p>
+        <p class="lab-fold-line lab-p" style="margin-top:0">ke majlis perkahwinan kami.</p>
+      </div>
+    </div>
+    <button id="fold-btn" type="button" class="btn mt-5 w-full">Buka</button>
+    <p class="lab-p" style="font-size:13px">
+      A paused timeline built once on load, then <code>.play()</code> /
+      <code>.reverse()</code> on tap — no re-render, no state.
+    </p>
+  </section>
+
+  <!-- ── Branch, done imperatively ───────────────────────────────── -->
+  <section class="lab-section">
+    <p class="lab-eyebrow">Branching</p>
+    <h2 class="lab-h">Bagaimana anda ke sana?</h2>
+    <p class="lab-p">
+      Same branch as the Motion probe, written imperatively so we can compare the
+      effort honestly.
+    </p>
+    <div class="mt-5 flex gap-3">
+      <button type="button" data-branch="memandu" class="gsap-choice">Memandu</button>
+      <button type="button" data-branch="bas" class="gsap-choice">Menaiki bas</button>
+    </div>
+    <div id="branch-host" class="mt-5"></div>
+    <p id="branch-empty" class="lab-p" style="font-size:13px">Nothing rendered yet — pick one.</p>
+  </section>
+
+  <section class="lab-section" style="min-height:60svh">
+    <p class="lab-eyebrow">End</p>
+    <h2 class="lab-h">Probe complete</h2>
+    <p class="lab-p"><a href="/lab" style="color:var(--dc-gold-deep)">← back to lab</a></p>
+  </section>
+</LabLayout>
+
+<style>
+  .gsap-choice {
+    flex: 1;
+    min-height: 48px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 14px;
+    border: 1px solid var(--dc-gold-soft);
+    background: transparent;
+    color: var(--dc-gold-deep);
+  }
+  .gsap-choice[data-active='true'] {
+    background: var(--dc-btn);
+    color: var(--dc-btn-text);
+    border-color: transparent;
+  }
+</style>
+
+<script>
+  import gsap from 'gsap';
+  import ScrollTrigger from 'gsap/ScrollTrigger';
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  // gsap.matchMedia handles reduced-motion and cleans itself up.
+  const mm = gsap.matchMedia();
+
+  mm.add(
+    {
+      motion: '(prefers-reduced-motion: no-preference)',
+      reduced: '(prefers-reduced-motion: reduce)',
+    },
+    (ctx) => {
+      const { reduced } = ctx.conditions as { motion: boolean; reduced: boolean };
+
+      if (reduced) {
+        gsap.set(['#scene-a', '#scene-b', '#scene-c', '#scene-ring'], {
+          opacity: 1,
+          y: 0,
+          scale: 1,
+        });
+        return;
+      }
+
+      /* 1. Pinned, scrubbed scroll choreography */
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: '#pin-wrap',
+          start: 'top top',
+          end: '+=900',
+          pin: true,
+          scrub: 1,
+        },
+      });
+
+      tl.from('#scene-a', { opacity: 0, y: 18, duration: 1 })
+        .from('#scene-ring', { scale: 0.5, opacity: 0, duration: 1.2 }, '<0.2')
+        .from('#scene-b', { opacity: 0, y: 30, duration: 1 }, '<0.3')
+        .from('#scene-c', { opacity: 0, y: 30, duration: 1 }, '<0.4')
+        .to('#scene-ring', { rotate: 90, duration: 1.5 }, '<');
+
+      /* 2. Tap-triggered timeline, built once and reused */
+      const foldTl = gsap
+        .timeline({ paused: true })
+        .from('.lab-fold-line', {
+          opacity: 0,
+          y: 16,
+          duration: 0.5,
+          stagger: 0.12,
+          ease: 'power2.out',
+        });
+
+      const btn = document.getElementById('fold-btn');
+      let open = false;
+      btn?.addEventListener('click', () => {
+        open = !open;
+        if (btn) btn.textContent = open ? 'Tutup' : 'Buka';
+        open ? foldTl.play() : foldTl.reverse();
+      });
+      // Start closed.
+      foldTl.progress(0).pause();
+      gsap.set('.lab-fold-line', { opacity: 0 });
+      foldTl.eventCallback('onReverseComplete', () => {
+        gsap.set('.lab-fold-line', { opacity: 0 });
+      });
+
+      /* 3. Branch — the DOM has to be built and torn down by hand */
+      const COPY: Record<string, string[]> = {
+        memandu: [
+          'KL → Karak → LPT, keluar Temerloh. Lebih kurang 2 jam.',
+          'Parkir percuma di belakang dewan, ruang untuk 80 kereta.',
+          'Waze: “Elegant Glam Hall Temerloh”.',
+        ],
+        bas: [
+          'TBS → Terminal Temerloh, tiap 2 jam bermula 7:00 pagi.',
+          'Dari terminal, Grab ke dewan lebih kurang 10 minit.',
+          'Beritahu kami — kami boleh aturkan jemputan.',
+        ],
+      };
+
+      const host = document.getElementById('branch-host');
+      const empty = document.getElementById('branch-empty');
+      let current: string | null = null;
+
+      function render(key: string) {
+        if (!host) return;
+        const card = document.createElement('div');
+        card.className = 'lab-card';
+        card.innerHTML = COPY[key]!
+          .map(
+            (l) =>
+              `<p class="lab-p branch-line" style="margin-top:0;display:flex;gap:10px">
+                 <span style="color:var(--dc-gold)">◆</span><span>${l}</span>
+               </p>`,
+          )
+          .join('');
+        host.appendChild(card);
+        gsap.from(card.querySelectorAll('.branch-line'), {
+          opacity: 0,
+          y: 18,
+          duration: 0.45,
+          stagger: 0.1,
+          ease: 'power2.out',
+        });
+        return card;
+      }
+
+      document.querySelectorAll<HTMLButtonElement>('.gsap-choice').forEach((b) => {
+        b.addEventListener('click', () => {
+          const key = b.dataset.branch!;
+          if (key === current) return;
+          current = key;
+          empty?.remove();
+          document
+            .querySelectorAll<HTMLButtonElement>('.gsap-choice')
+            .forEach((o) => (o.dataset.active = String(o === b)));
+
+          const prev = host?.firstElementChild;
+          if (prev) {
+            // Manual exit-then-enter. AnimatePresence does this for free.
+            gsap.to(prev, {
+              opacity: 0,
+              y: -12,
+              duration: 0.3,
+              ease: 'power2.in',
+              onComplete: () => {
+                prev.remove();
+                render(key);
+              },
+            });
+          } else {
+            render(key);
+          }
+        });
+      });
+    },
+  );
+</script>

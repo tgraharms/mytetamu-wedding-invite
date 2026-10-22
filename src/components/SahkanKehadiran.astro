@@ -1,0 +1,170 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+import { whatsappUrl, googleCalendarUrl } from '../lib/links';
+import { CONTACTS } from '../lib/portfolioContent';
+---
+
+<Section id="rsvp" title="Sahkan Kehadiran" bg="bg-rsvp" card>
+  <form id="rsvp-form" class="space-y-5" novalidate>
+    <div>
+      <label for="rsvp-nama" class="mb-1 block text-center text-sm font-medium">Nama Tetamu</label>
+      <input id="rsvp-nama" name="nama" type="text" autocomplete="name" required class="input text-center" />
+      <p data-error-for="nama" class="mt-1 hidden text-center text-sm text-red-600">Sila isi nama anda.</p>
+    </div>
+
+    <div>
+      <label for="rsvp-pax" class="mb-1 block text-center text-sm font-medium">Bilangan kehadiran</label>
+      <select id="rsvp-pax" name="pax" required class="input text-center">
+        <option value="" disabled selected>Pilih bilangan</option>
+        <option value="1">1 orang</option>
+        <option value="2">2 orang</option>
+        <option value="3">3 orang</option>
+        <option value="4">4 orang</option>
+        <option value="5">5 orang</option>
+        <option value="6">6 orang</option>
+        <option value="7">7 orang</option>
+        <option value="8">8 orang</option>
+        <option value="9">9 orang</option>
+        <option value="10">10 orang</option>
+      </select>
+      <p data-error-for="pax" class="mt-1 hidden text-center text-sm text-red-600">
+        Sila pilih bilangan kehadiran.
+      </p>
+    </div>
+
+    <fieldset>
+      <legend class="mx-auto mb-2 text-center text-sm font-medium">Bermalam di Pahang? <span class="font-normal text-stone-500">(pilihan)</span></legend>
+      <div class="flex justify-center gap-6">
+        <label class="flex min-h-11 items-center gap-2">
+          <input type="radio" name="bermalam" value="ya" class="size-5" />
+          Ya
+        </label>
+        <label class="flex min-h-11 items-center gap-2">
+          <input type="radio" name="bermalam" value="tidak" class="size-5" />
+          Tidak
+        </label>
+      </div>
+    </fieldset>
+
+    <div id="rsvp-failure" aria-live="polite" class="hidden rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <p>Maaf, ada masalah teknikal semasa menghantar. Sila cuba sekali lagi.</p>
+      <p class="mt-2">
+        Jika masih gagal, boleh terus WhatsApp
+        <a href={CONTACTS[0].phone ? whatsappUrl(CONTACTS[0].phone) : undefined} target={CONTACTS[0].phone ? '_blank' : undefined} rel={CONTACTS[0].phone ? 'noopener' : undefined} class="inline-flex items-center gap-1 font-medium underline">
+          <img src="/icons/whatsapp.svg" alt="" aria-hidden="true" class="h-4 w-4" />
+          {site.penutup.contacts[0].name}
+        </a>.
+      </p>
+    </div>
+
+    {/* Kekal sebagai anak terakhir: space-y beri margin kepada semua kecuali
+        yang terakhir, jadi kotak tersembunyi di hujung akan tinggalkan jurang. */}
+    <div class="flex justify-center">
+      <button id="rsvp-submit" type="submit" class="btn px-10">
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" />
+        </svg>
+        <span data-label>Hantar</span>
+      </button>
+    </div>
+  </form>
+
+  <div id="rsvp-success" aria-live="polite" class="hidden rounded-xl border border-green-200 bg-green-50 p-6 text-center text-green-800">
+    <p class="font-medium">Terima kasih, kehadiran anda telah disahkan.</p>
+    <a href={googleCalendarUrl()} target="_blank" rel="noopener" class="btn mt-4">Simpan ke Google Calendar</a>
+    <button id="rsvp-reset" type="button" class="mt-4 text-sm text-green-700 underline">
+      Hantar semula?
+    </button>
+  </div>
+</Section>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { saveName } from '../lib/guest';
+
+  const form = document.getElementById('rsvp-form') as HTMLFormElement;
+  const successBox = document.getElementById('rsvp-success')!;
+  const failureBox = document.getElementById('rsvp-failure')!;
+  const submitBtn = document.getElementById('rsvp-submit') as HTMLButtonElement;
+  const resetBtn = document.getElementById('rsvp-reset') as HTMLButtonElement;
+
+  const RSVP_DONE_KEY = 'rsvp-done';
+
+  function showSuccess(): void {
+    form.classList.add('hidden');
+    successBox.classList.remove('hidden');
+  }
+
+  // localStorage boleh gagal (mod privasi) — RSVP mesti tetap berfungsi.
+  try {
+    if (localStorage.getItem(RSVP_DONE_KEY)) showSuccess();
+  } catch {
+    /* abaikan */
+  }
+
+  resetBtn.addEventListener('click', () => {
+    try {
+      localStorage.removeItem(RSVP_DONE_KEY);
+    } catch {
+      /* abaikan */
+    }
+    successBox.classList.add('hidden');
+    form.classList.remove('hidden');
+    submitBtn.disabled = false;
+    submitBtn.querySelector('[data-label]')!.textContent = 'Hantar';
+  });
+
+  function showError(field: string, show: boolean): void {
+    const el = form.querySelector(`[data-error-for="${field}"]`)!;
+    el.classList.toggle('hidden', !show);
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const nama = (form.elements.namedItem('nama') as HTMLInputElement).value.trim();
+    const pax = Number.parseInt((form.elements.namedItem('pax') as HTMLInputElement).value, 10);
+    const bermalamRaw = new FormData(form).get('bermalam');
+
+    const namaInvalid = nama === '';
+    const paxInvalid = !Number.isInteger(pax) || pax < 1;
+    showError('nama', namaInvalid);
+    showError('pax', paxInvalid);
+    if (namaInvalid || paxInvalid) return;
+
+    submitBtn.disabled = true;
+    submitBtn.querySelector('[data-label]')!.textContent = 'Menghantar…';
+    failureBox.classList.add('hidden');
+
+    let failed = false;
+    try {
+      const { error } = await supabase
+        .from('rsvp')
+        .insert({
+          nama,
+          pax,
+          bermalam: bermalamRaw === null ? null : bermalamRaw === 'ya',
+        })
+        .abortSignal(AbortSignal.timeout(15_000));
+      failed = error !== null;
+    } catch {
+      failed = true;
+    }
+
+    if (failed) {
+      failureBox.classList.remove('hidden');
+      submitBtn.disabled = false;
+      submitBtn.querySelector('[data-label]')!.textContent = 'Hantar';
+      return;
+    }
+
+    try {
+      localStorage.setItem(RSVP_DONE_KEY, new Date().toISOString());
+    } catch {
+      /* abaikan */
+    }
+    saveName(nama);
+    showSuccess();
+  });
+</script>

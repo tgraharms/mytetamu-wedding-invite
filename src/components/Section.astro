@@ -1,0 +1,132 @@
+---
+import BackgroundImage from './BackgroundImage.astro';
+import manifest from '../../public/bg/manifest.json';
+
+interface Props {
+  id: string;
+  title: string;
+  /** Optional full-bleed background: a key in public/bg/manifest.json. */
+  bg?: keyof typeof manifest;
+  /** Stronger scrim for busy artwork that competes with the content. */
+  muted?: boolean;
+  /** Wrap content in a frosted card; the artwork stays richer behind it. */
+  card?: boolean;
+}
+
+const { id, title, bg, muted = false, card = false } = Astro.props;
+// Kad kaca sudah memberi kontras, jadi skrim boleh lebih nipis.
+const band = card ? 0.45 : muted ? 0.9 : 0.72;
+---
+
+{
+  bg ? (
+    <section id={id} class="section-bg relative w-full scroll-mt-16">
+      <BackgroundImage name={bg} band={band} />
+      <div data-anim class="relative z-10 mx-auto w-full max-w-md px-6 py-16">
+        <h2 class="font-display dc-heading text-center text-3xl font-semibold">{title}</h2>
+        <div class="dc-divider" aria-hidden="true"><span /></div>
+        {
+          card ? (
+            <div class="dc-card" style="text-shadow: none">
+              <slot />
+            </div>
+          ) : (
+            <slot />
+          )
+        }
+      </div>
+    </section>
+  ) : (
+    <section id={id} data-anim class="mx-auto w-full max-w-md scroll-mt-16 px-6 py-12">
+      <h2 class="font-display dc-heading text-center text-3xl font-semibold">{title}</h2>
+      <div class="dc-divider" aria-hidden="true"><span /></div>
+      <slot />
+    </section>
+  )
+}
+
+<script>
+  // Setiap seksyen muncul lembut sekali sahaja apabila masuk pandangan, supaya
+  // skrol selepas hero tidak terasa mati.
+  //
+  // Tiga perkara di sini semuanya tentang satu perkara yang sama — jangan
+  // sesekali tinggalkan tetamu dengan seksyen yang tidak pernah muncul:
+  //
+  //   1. Hanya seksyen di BAWAH lipatan yang disembunyikan. Apa yang sudah
+  //      terpampang semasa muat tidak pernah disentuh.
+  //   2. Kalau skrip ini langsung tidak berjalan, tiada apa yang tersembunyi.
+  //   3. Jaring keselamatan: kalau pemerhati tidak pernah melapor (pelayar
+  //      dalam-aplikasi yang pelik, tab yang dibuka di latar belakang),
+  //      semuanya dibuka semula selepas beberapa saat.
+  const kurangGerak = window.matchMedia('(prefers-reduced-motion: reduce)');
+  if (!kurangGerak.matches && 'IntersectionObserver' in window) {
+    const garisan = window.innerHeight * 0.85;
+    const calon = [...document.querySelectorAll('[data-anim]')].filter(
+      (n) => n.getBoundingClientRect().top > garisan,
+    );
+    for (const n of calon) n.classList.add('anim-sembunyi');
+
+    const tunjuk = (n: Element) => n.classList.remove('anim-sembunyi');
+    let pernahLapor = false;
+
+    const pemerhati = new IntersectionObserver(
+      (masukan) => {
+        // Sebarang laporan — termasuk laporan pertama yang berkata "belum
+        // masuk pandangan" — sudah membuktikan pemerhati ini hidup. Itulah
+        // yang jaring keselamatan di bawah mahu tahu; menunggu sesuatu
+        // benar-benar masuk pandangan akan menghukum tetamu yang berlama-lama
+        // di hero dengan membuang kesan ini sebelum mereka sempat skrol.
+        pernahLapor = true;
+        for (const m of masukan) {
+          if (!m.isIntersecting) continue;
+          tunjuk(m.target);
+          pemerhati.unobserve(m.target);
+        }
+      },
+      // Garis pencetus DINAIKKAN ke 80% tinggi skrin, bukan tepi bawah.
+      // Bar navigasi bawah menduduki lebih kurang 90px paling bawah, jadi
+      // seksyen yang mula beralun di situ beralun di BELAKANG bar itu dan
+      // tetamu terlepas keseluruhannya. Ambang 0 pula bermakna pencetusnya
+      // ialah tepi atas seksyen melintasi garis itu — boleh diramal untuk
+      // seksyen pendek mahupun seksyen yang lebih tinggi daripada skrin.
+      { threshold: 0, rootMargin: '0px 0px -20% 0px' },
+    );
+    for (const n of calon) pemerhati.observe(n);
+
+    window.setTimeout(() => {
+      if (!pernahLapor) for (const n of calon) tunjuk(n);
+    }, 8000);
+  }
+</script>
+
+<style>
+  .dc-heading {
+    color: #3b362f;
+    margin-bottom: 0;
+  }
+
+  /* Kad kaca berfrost — sepadan dengan reka bentuk Jemputan. */
+  .dc-card {
+    background: rgba(255, 254, 251, 0.85);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 24px;
+    box-shadow:
+      0 30px 70px -32px rgba(60, 50, 35, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    padding: 32px 26px;
+  }
+
+  /* Sections size to their content (no forced full-screen) and every
+     background fades to the shell's warm cream at both edges, so adjacent
+     artworks blend through a common soft tone instead of hard seams.
+     --band controls how strongly the artwork is muted behind the content. */
+  .section-bg {
+    /* Soft halo behind all text lifts it off busy artwork without
+       thickening the scrim (buttons/inputs opt out in global.css). */
+    text-shadow:
+      0 0 6px rgba(247, 243, 236, 0.9),
+      0 0 18px rgba(247, 243, 236, 0.7);
+  }
+</style>

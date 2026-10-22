@@ -1,0 +1,212 @@
+---
+import LabLayout from '../../layouts/LabLayout.astro';
+---
+
+<LabLayout title="Vanilla Motion" tag="motion (no React)">
+  <section class="lab-section">
+    <p class="lab-eyebrow">Probe 04</p>
+    <h1 class="lab-h" style="font-size:52px">Motion, no React</h1>
+    <p class="lab-p">
+      The same <code>motion</code> package as probe 01, but its framework-free
+      API — <code>animate</code>, <code>inView</code>, <code>press</code>,
+      <code>stagger</code>. Identical easing engine, none of the React runtime.
+    </p>
+  </section>
+
+  <!-- Scroll-triggered -->
+  <section class="lab-section">
+    <p class="lab-eyebrow">Scroll-triggered</p>
+    <h2 class="lab-h">Bismillah</h2>
+    <div id="v-seq" style="display:grid;gap:14px;margin-top:16px">
+      <p class="lab-p v-item" style="margin-top:0">
+        Same fade / rise / scale on a stagger as probe 01.
+      </p>
+      <div class="lab-card v-item">
+        <p class="lab-p" style="margin-top:0">
+          <code>inView()</code> wraps IntersectionObserver, <code>stagger()</code>
+          spaces the children.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tap-triggered -->
+  <section class="lab-section">
+    <p class="lab-eyebrow">Tap-triggered</p>
+    <h2 class="lab-h">Dua majlis</h2>
+    <div class="lab-card mt-6" style="min-height:150px">
+      <div id="v-face">
+        <p class="lab-eyebrow" id="v-face-label">Akad Nikah</p>
+        <p id="v-face-time"
+           style="font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--dc-ink-strong);margin-top:6px">
+          10:00 pagi
+        </p>
+        <p class="lab-p" id="v-face-note" style="margin-top:4px">Masjid Jamek Temerloh</p>
+      </div>
+    </div>
+    <button id="v-swap" type="button" class="btn mt-5 w-full">Tukar majlis</button>
+  </section>
+
+  <!-- Branch -->
+  <section class="lab-section">
+    <p class="lab-eyebrow">Branching</p>
+    <h2 class="lab-h">Bagaimana anda ke sana?</h2>
+    <p class="lab-p">Same branch again, no framework.</p>
+    <div class="mt-5 flex gap-3">
+      <button type="button" data-vbranch="memandu" class="v-choice">Memandu</button>
+      <button type="button" data-vbranch="bas" class="v-choice">Menaiki bas</button>
+    </div>
+    <div id="v-host" class="mt-5"></div>
+    <p id="v-empty" class="lab-p" style="font-size:13px">Nothing rendered yet — pick one.</p>
+  </section>
+
+  <section class="lab-section" style="min-height:60svh">
+    <p class="lab-eyebrow">End</p>
+    <h2 class="lab-h">Probe complete</h2>
+    <p class="lab-p"><a href="/lab" style="color:var(--dc-gold-deep)">← back to lab</a></p>
+  </section>
+</LabLayout>
+
+<style>
+  .v-choice {
+    flex: 1;
+    min-height: 48px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 14px;
+    border: 1px solid var(--dc-gold-soft);
+    background: transparent;
+    color: var(--dc-gold-deep);
+  }
+  .v-choice[data-active='true'] {
+    background: var(--dc-btn);
+    color: var(--dc-btn-text);
+    border-color: transparent;
+  }
+</style>
+
+<script>
+  import { animate, inView, press, stagger } from 'motion';
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const EASE = [0.22, 1, 0.36, 1] as const;
+
+  /* 1. Scroll-triggered sequence */
+  const items = document.querySelectorAll<HTMLElement>('#v-seq .v-item');
+  if (reduced) {
+    items.forEach((el) => (el.style.opacity = '1'));
+  } else {
+    items.forEach((el) => {
+      el.style.opacity = '0';
+    });
+    inView(
+      '#v-seq',
+      () => {
+        animate(
+          items,
+          { opacity: [0, 1], transform: ['translateY(28px) scale(.97)', 'none'] },
+          { duration: 0.7, ease: EASE, delay: stagger(0.12) },
+        );
+      },
+      { amount: 0.35 },
+    );
+  }
+
+  /* 2. Tap-triggered transition */
+  const FACES = [
+    { label: 'Akad Nikah', time: '10:00 pagi', note: 'Masjid Jamek Temerloh' },
+    { label: 'Resepsi', time: '7:00 malam', note: 'Elegant Glam Hall' },
+  ];
+  let fi = 0;
+  const face = document.getElementById('v-face')!;
+  const swap = document.getElementById('v-swap');
+
+  swap?.addEventListener('click', async () => {
+    fi = (fi + 1) % FACES.length;
+    const next = FACES[fi]!;
+    // Exit, mutate, enter — what AnimatePresence automates in the React version.
+    if (!reduced) {
+      await animate(
+        face,
+        { opacity: [1, 0], transform: ['none', 'translateY(-14px) scale(.98)'] },
+        { duration: 0.22, ease: 'easeIn' },
+      );
+    }
+    document.getElementById('v-face-label')!.textContent = next.label;
+    document.getElementById('v-face-time')!.textContent = next.time;
+    document.getElementById('v-face-note')!.textContent = next.note;
+    if (!reduced) {
+      animate(
+        face,
+        { opacity: [0, 1], transform: ['translateY(14px) scale(.98)', 'none'] },
+        { duration: 0.32, ease: EASE },
+      );
+    }
+  });
+
+  if (swap && !reduced) press(swap, (el) => {
+    animate(el, { scale: 0.97 }, { duration: 0.12 });
+    return () => animate(el, { scale: 1 }, { duration: 0.18 });
+  });
+
+  /* 3. Branch */
+  const COPY: Record<string, string[]> = {
+    memandu: [
+      'KL → Karak → LPT, keluar Temerloh. Lebih kurang 2 jam.',
+      'Parkir percuma di belakang dewan, ruang untuk 80 kereta.',
+      'Waze: “Elegant Glam Hall Temerloh”.',
+    ],
+    bas: [
+      'TBS → Terminal Temerloh, tiap 2 jam bermula 7:00 pagi.',
+      'Dari terminal, Grab ke dewan lebih kurang 10 minit.',
+      'Beritahu kami — kami boleh aturkan jemputan.',
+    ],
+  };
+  const host = document.getElementById('v-host')!;
+  let current: string | null = null;
+
+  function paint(key: string) {
+    const card = document.createElement('div');
+    card.className = 'lab-card';
+    card.innerHTML = COPY[key]!
+      .map(
+        (l) => `<p class="lab-p v-line" style="margin-top:0;display:flex;gap:10px">
+                  <span style="color:var(--dc-gold)">◆</span><span>${l}</span>
+                </p>`,
+      )
+      .join('');
+    host.appendChild(card);
+    if (!reduced) {
+      animate(
+        card.querySelectorAll('.v-line'),
+        { opacity: [0, 1], transform: ['translateY(18px)', 'none'] },
+        { duration: 0.45, ease: EASE, delay: stagger(0.1) },
+      );
+    }
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.v-choice').forEach((b) => {
+    b.addEventListener('click', async () => {
+      const key = b.dataset.vbranch!;
+      if (key === current) return;
+      current = key;
+      document.getElementById('v-empty')?.remove();
+      document
+        .querySelectorAll<HTMLButtonElement>('.v-choice')
+        .forEach((o) => (o.dataset.active = String(o === b)));
+
+      const prev = host.firstElementChild as HTMLElement | null;
+      if (prev) {
+        if (!reduced) {
+          await animate(
+            prev,
+            { opacity: [1, 0], transform: ['none', 'translateY(-12px)'] },
+            { duration: 0.3, ease: 'easeIn' },
+          );
+        }
+        prev.remove();
+      }
+      paint(key);
+    });
+  });
+</script>

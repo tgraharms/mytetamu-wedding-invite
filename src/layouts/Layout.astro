@@ -1,0 +1,46 @@
+---
+import '../styles/global.css';
+import PortfolioBanner from '../components/PortfolioBanner.astro';
+import { PORTFOLIO } from '../lib/portfolio';
+
+interface Props {
+  title: string;
+  description: string;
+  noindex?: boolean;
+}
+
+const { title, description, noindex = false } = Astro.props;
+const ogUrl = new URL(Astro.url.pathname, Astro.site).href;
+// Nama fail baharu, bukan tulis ganti og.png: WhatsApp dan Telegram menyimpan
+// gambar kongsi mengikut URL, jadi nama lama akan terus memaparkan reka bentuk
+// lama kepada sesiapa yang pernah berkongsi pautan ini.
+const ogImage = new URL('/og-2026.jpg', Astro.site).href;
+---
+
+<!doctype html>
+<html lang="ms">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/cormorant-garamond-500.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/mulish-400.woff2" as="font" type="font/woff2" crossorigin />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={ogUrl} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    {(noindex || PORTFOLIO) && <meta name="robots" content="noindex, nofollow" />}
+  </head>
+  <body class="dc-body antialiased">{PORTFOLIO && <PortfolioBanner />}
+    <slot />
+  </body>
+</html>

@@ -1,0 +1,536 @@
+---
+import Section from './Section.astro';
+---
+
+<Section id="hadiah" title="Cadangan Hadiah">
+  <p class="-mt-2 mb-4 text-center text-sm text-stone-600">
+    Wishlist peribadi kami, sekadar untuk rujukan.
+  </p>
+  <p data-hadiah-count class="mb-6 hidden text-center text-sm text-stone-600"></p>
+  <p data-hadiah-loading class="text-center text-sm text-stone-500">Memuatkan senarai…</p>
+  <p data-hadiah-failure class="hidden text-center text-sm text-stone-500">
+    Maaf, senarai tidak dapat dimuatkan buat masa ini. Sila cuba semula sebentar lagi.
+  </p>
+  {/* Nota status tempahan, sengaja berasingan daripada nota gagal-muat di atas.
+      Dahulu kedua-duanya berkongsi satu perenggan: kalau senarai hadiah langsung
+      gagal dimuat, segerakan yang berjaya kemudian akan memadam mesej itu dan
+      meninggalkan tetamu dengan kapsyen tanpa senarai, tanpa pemuat, tanpa ralat. */}
+  <p data-hadiah-nota class="hidden text-center text-sm text-stone-500"></p>
+  {/* Senarai boleh kosong dengan sah: setiap hadiah boleh disorok dari papan
+      /urus, dan dasar bacaan anon hanya memulangkan baris yang aktif. Bila itu
+      berlaku, seksyen ini tinggal tajuk dan ruang kosong — pemuat sudah
+      ditanggalkan, kapsyen kiraan tidak pernah dipapar, dan nota di atas milik
+      keadaan lain. Perenggan inilah yang bercakap dalam keadaan itu. */}
+  <p data-hadiah-kosong class="hidden text-center text-sm text-stone-600">
+    Buat masa ini belum ada cadangan hadiah untuk dipaparkan. Kehadiran dan doa anda sudah cukup bermakna buat kami. 💛
+  </p>
+  <ul
+    data-hadiah-list
+    class="carousel -mx-6 hidden snap-x snap-mandatory items-stretch gap-3 overflow-x-auto px-6 pb-2"
+  ></ul>
+  <div data-hadiah-dots class="mt-4 hidden justify-center gap-1.5" aria-hidden="true"></div>
+</Section>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { loadList, el, linkEl } from '../lib/liveList';
+  import { initCarousel } from '../lib/carousel';
+  import {
+    ACARA_PROFIL,
+    getProfil,
+    saveProfil,
+    getPrefillNama,
+    getPrefillTelefon,
+    type ProfilTetamu,
+  } from '../lib/guest';
+
+  const HAD = 2; // paparan sahaja — pelayan yang menguatkuasakan had sebenar
+
+  const list = document.querySelector('[data-hadiah-list]') as HTMLElement;
+  const countEl = document.querySelector('[data-hadiah-count]') as HTMLElement;
+  // Perenggan ini milik renderNota() SAHAJA. Nota gagal-muat senarai adalah
+  // perenggan lain, milik loadList() — lihat komen dalam templat di atas.
+  const notaEl = document.querySelector('[data-hadiah-nota]') as HTMLElement;
+  const dotsBox = document.querySelector('[data-hadiah-dots]') as HTMLElement;
+
+  let reservedIds = new Set<number>();
+  let myIds = new Set<number>();
+
+  // Bolehkah kedua-dua set di atas dipercayai? Satu blip rangkaian tidak boleh
+  // menyebabkan hadiah yang sudah ditempah dipapar seolah-olah masih kosong.
+  let senaraiPasti = false;
+  let statusPasti = true;
+
+  // Identiti dalam ingatan. localStorage boleh gagal senyap (mod privasi), jadi
+  // nombor yang baru sahaja disahkan pelayan disimpan di sini juga supaya butang
+  // "Batal tempahan" tetap berfungsi dalam sesi yang sama.
+  let identitiIngatan: { nama: string; telefon: string } | null = null;
+
+  // Dua borang boleh terbuka serentak. Nombor giliran ini naik pada DUA perkara:
+  // setiap segerakKeadaan() yang bermula, dan setiap tulisan tempatan yang
+  // berjaya. Sesuatu segerakan hanya dibenarkan menulis kalau nombornya masih
+  // yang terbaharu — jadi segerakan yang dihantar SEBELUM sesuatu tempahan atau
+  // pembatalan sempat masuk ke pelayan tidak boleh menimbus keadaan yang lebih
+  // baharu. Menaikkannya pada tulisan itu penting: tulisan yang berjaya tidak
+  // semestinya menghantar segerakannya sendiri.
+  let syncSeq = 0;
+
+  // Nombor telefon yang `myIds` benar-benar menggambarkannya — ditetapkan hanya
+  // oleh segerakan yang sempat menulis. `null` bermakna kita belum kenal sesiapa.
+  let telefonSegerak: string | null = null;
+
+  // saveProfil() menyiarkan identiti kepada seluruh halaman. Bila kitalah yang
+  // memanggilnya, laluan borang di bawah sudah pun menguruskan segerakannya
+  // sendiri — jadi siaran itu mesti diabaikan supaya tiada dua segerakan
+  // serentak untuk nombor yang sama. Penghantaran CustomEvent bersifat segerak,
+  // jadi bendera ini pasti masih menyala semasa pendengar di bawah berjalan.
+  let siaranSendiri = false;
+
+  function ingatIdentiti(nama: string, telefon: string): void {
+    identitiIngatan = { nama, telefon };
+    siaranSendiri = true;
+    try {
+      saveProfil(nama, telefon);
+    } finally {
+      siaranSendiri = false;
+    }
+  }
+
+  function identitiSemasa(): { nama: string; telefon: string } | null {
+    return getProfil() ?? identitiIngatan;
+  }
+
+  function renderCount(): void {
+    const base = `Anda boleh menempah sehingga ${HAD} hadiah`;
+    const kenal = identitiSemasa() !== null && statusPasti;
+    countEl.textContent = kenal ? `${base} · ${myIds.size}/${HAD} digunakan` : base;
+    countEl.classList.remove('hidden');
+  }
+
+  function renderNota(): void {
+    if (!senaraiPasti) {
+      notaEl.textContent =
+        'Maaf, status tempahan tidak dapat disemak buat masa ini. Sila muat semula halaman sebentar lagi.';
+      notaEl.classList.remove('hidden');
+    } else if (!statusPasti) {
+      notaEl.textContent =
+        'Maaf, tempahan anda sendiri tidak dapat dimuatkan buat masa ini. Sila muat semula halaman sebentar lagi.';
+      notaEl.classList.remove('hidden');
+    } else {
+      notaEl.textContent = '';
+      notaEl.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Hasil sesuatu segerakan, dilaporkan terus kepada pemanggilnya. `terpakai:
+   * false` bermakna segerakan ini sudah lapuk dan tidak menulis apa-apa — maka
+   * bendera modul menggambarkan pandangan segerakan LAIN, dan pemanggil tidak
+   * boleh bercakap bagi pihaknya.
+   */
+  type HasilSegerak =
+    | { terpakai: false }
+    | { terpakai: true; senarai: boolean; status: boolean };
+
+  /**
+   * Baca semula keadaan sebenar daripada pelayan dan bina semula kedua-dua set.
+   * Setiap set hanya ditulis ganti bila RPC-nya sendiri benar-benar menjawab,
+   * supaya kegagalan rangkaian tidak memadam apa yang kita sudah tahu.
+   */
+  async function segerakKeadaan(telefon: string | null): Promise<HasilSegerak> {
+    const giliran = ++syncSeq;
+
+    const [ditempahRes, statusRes] = await Promise.all([
+      supabase.rpc('senarai_ditempah').abortSignal(AbortSignal.timeout(15_000)),
+      telefon
+        ? supabase.rpc('status_tetamu', { p_telefon: telefon }).abortSignal(AbortSignal.timeout(15_000))
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    // Segerakan lain sudah bermula, atau tempahan/pembatalan sudah masuk,
+    // selepas kita menghantar soalan ini: jawapannya sudah lapuk. Biarkan yang
+    // terbaharu yang menulis — kalau tidak, tempahan yang baru sahaja berjaya
+    // boleh hilang semula daripada paparan.
+    if (giliran !== syncSeq) return { terpakai: false };
+
+    // Mulai baris ini, keadaan di bawah menggambarkan nombor INI. Segerakan
+    // lapuk tidak sampai ke sini, jadi catatan ini tidak boleh diundurkan oleh
+    // jawapan yang lebih lama.
+    telefonSegerak = telefon;
+
+    const ditempah = ditempahRes.data;
+    senaraiPasti = !ditempahRes.error && Array.isArray(ditempah);
+    if (senaraiPasti) reservedIds = new Set<number>((ditempah as unknown[]).map(Number));
+
+    const tempahan = (statusRes.data as { tempahan?: unknown[] } | null)?.tempahan;
+    if (telefon === null) {
+      statusPasti = true;
+      myIds = new Set<number>();
+    } else {
+      statusPasti = !statusRes.error && Array.isArray(tempahan);
+      if (statusPasti) myIds = new Set<number>((tempahan as unknown[]).map(Number));
+    }
+
+    renderNota();
+    return { terpakai: true, senarai: senaraiPasti, status: statusPasti };
+  }
+
+  function renderStatus(li: HTMLElement, giftId: number): void {
+    const zone = li.querySelector('[data-tempah-zone]') as HTMLElement;
+    zone.replaceChildren();
+
+    if (myIds.has(giftId)) {
+      zone.appendChild(
+        el('span', 'inline-block rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800', 'Ditempah oleh anda ✓'),
+      );
+      const cancelBtn = el('button', 'mt-2 inline-block rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600', 'Batal tempahan') as HTMLButtonElement;
+      cancelBtn.type = 'button';
+      cancelBtn.addEventListener('click', () => cancel(li, giftId, cancelBtn));
+      zone.appendChild(cancelBtn);
+      li.classList.remove('opacity-60');
+    } else if (reservedIds.has(giftId)) {
+      zone.appendChild(el('span', 'inline-block rounded-full bg-stone-100 px-3 py-1 text-xs font-medium text-stone-500', 'Telah ditempah'));
+      li.classList.add('opacity-60');
+    } else {
+      const btn = el('button', 'btn btn-kecil mt-1', 'Tempah untuk kami') as HTMLButtonElement;
+      btn.type = 'button';
+      if (!senaraiPasti) {
+        // Kita tidak tahu hadiah ini masih kosong atau tidak — jangan ajak
+        // tetamu menempah sesuatu yang mungkin sudah berpunya.
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+        btn.textContent = 'Status tempahan tidak dapat disemak';
+      } else if (myIds.size >= HAD) {
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+        btn.textContent = `Had ${HAD} tempahan dicapai`;
+      } else {
+        btn.addEventListener('click', () => showConfirm(li, giftId, zone));
+      }
+      zone.appendChild(btn);
+      li.classList.remove('opacity-60');
+    }
+  }
+
+  /** Nota kekal di bawah status sesuatu kad — tidak dipadam oleh pemasa. */
+  function paparNota(li: HTMLElement, teks: string, ralat = false): void {
+    const zone = li.querySelector('[data-tempah-zone]') as HTMLElement;
+    zone.appendChild(el('p', `mt-2 text-sm ${ralat ? 'text-red-600' : 'text-stone-600'}`, teks));
+  }
+
+  // sudah_ditempah dan had_capai tidak di sini: kedua-duanya dijawab selepas
+  // keadaan sebenar dibaca semula, jadi ayatnya bergantung pada apa yang pelayan
+  // beritahu (hadiah sendiri atau hadiah orang lain).
+  function mesejRalat(message: string): string {
+    if (message.includes('telefon_tidak_sah')) return 'Sila semak nombor telefon anda.';
+    if (message.includes('nama_diperlukan')) return 'Sila isi nama anda.';
+    if (message.includes('hadiah_tiada')) return 'Maaf, hadiah ini tiada lagi dalam senarai.';
+    return 'Maaf, ada masalah teknikal. Sila cuba sekali lagi.';
+  }
+
+  function showConfirm(li: HTMLElement, giftId: number, zone: HTMLElement): void {
+    zone.replaceChildren();
+    const form = document.createElement('form');
+    form.noValidate = true;
+    form.className = 'space-y-2';
+    // autocomplete: seluruh reka bentuk identiti bergantung pada tetamu menaip
+    // semula nombornya pada peranti baharu. Tanpa token ini sistem pengendali
+    // tidak pernah menawarkan kenalan yang tersimpan. `role` pula memberitahu
+    // pembaca skrin bila tempahan ditolak — nota ralat di bawah didedahkan
+    // dengan menanggalkan sifat papar "none" sahaja (sama seperti borang RSVP).
+    // Butang BERTINDAN, bukan bersebelahan. Dua butang berkongsi lebar kad
+    // memberi setiap satu kira-kira 110px, dan "Sahkan tempahan" tidak muat —
+    // ia pecah dua baris lalu membengkak jadi bulatan gelap yang menenggelamkan
+    // kad. Bertindan, setiap butang dapat lebar penuh dan kekal satu baris.
+    //
+    // Ruang letak telefon juga dipendekkan: contoh yang panjang terpotong di
+    // tengah nombor pada kad selebar ini, dan contoh separuh lagi mengelirukan
+    // daripada tiada contoh langsung.
+    form.innerHTML = `
+      <input name="nama" type="text" required autocomplete="name" placeholder="Nama anda" class="input" />
+      <input name="telefon" type="tel" required autocomplete="tel" placeholder="No. telefon" class="input" />
+      <p data-tempah-error role="status" class="hidden text-sm text-red-600"></p>
+      <div class="space-y-2 pt-1">
+        <button type="submit" class="btn btn-kecil w-full">Sahkan tempahan</button>
+        <button type="button" data-batal class="w-full rounded-xl border border-stone-300 px-4 py-2 text-sm text-stone-600">Kembali</button>
+      </div>
+    `;
+    // Prefill: localStorage dahulu, jatuh balik ke identiti dalam ingatan supaya
+    // tetamu dalam mod privasi tidak perlu menaip semula setiap kali.
+    const ingatan = identitiSemasa();
+    (form.elements.namedItem('nama') as HTMLInputElement).value = getPrefillNama() || ingatan?.nama || '';
+    (form.elements.namedItem('telefon') as HTMLInputElement).value =
+      getPrefillTelefon() || ingatan?.telefon || '';
+    zone.appendChild(form);
+
+    (form.querySelector('[data-batal]') as HTMLButtonElement).addEventListener('click', () =>
+      renderStatus(li, giftId),
+    );
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nama = (form.elements.namedItem('nama') as HTMLInputElement).value.trim();
+      const telefon = (form.elements.namedItem('telefon') as HTMLInputElement).value.trim();
+      const errEl = form.querySelector('[data-tempah-error]') as HTMLElement;
+      if (nama === '' || telefon === '') {
+        errEl.textContent = 'Sila isi nama dan nombor telefon anda.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Menempah…';
+      // Ralat cubaan lepas tidak boleh kekal merah sambil butang berkata
+      // "Menempah…" — tetamu mungkin baru sahaja membetulkannya.
+      errEl.textContent = '';
+      errEl.classList.add('hidden');
+
+      // Shim postgrest tidak pernah reject — ia sentiasa resolve dengan
+      // {data, error}. Jadi `error` yang diperiksa, bukan try/catch.
+      const { error } = await supabase
+        .rpc('tempah_hadiah', { p_telefon: telefon, p_nama: nama, p_gift_item_id: giftId })
+        .abortSignal(AbortSignal.timeout(15_000));
+
+      if (!error) {
+        ingatIdentiti(nama, telefon);
+        myIds.add(giftId);
+        reservedIds.add(giftId);
+        // Tempahan ini sudah masuk ke pelayan. Apa-apa segerakan yang dihantar
+        // sebelum ini bertanya sebelum ia wujud, jadi jawapannya tidak boleh
+        // dibenarkan memadamkannya semula daripada paparan.
+        syncSeq++;
+        // Baca semula melainkan `myIds` memang sudah menggambarkan nombor INI.
+        // Ujiannya mesti terhadap telefonSegerak — nombor yang segerakan
+        // terakhir yang sempat MENULIS benar-benar tanyakan — bukan terhadap
+        // identiti semasa. Pendengar siaran menetapkan identiti dalam ingatan
+        // SEBELUM segerakannya sendiri selesai, jadi turutan siar-kemudian-hantar
+        // boleh membuatkan laluan ini menyangka ia sudah terkini lalu melangkau
+        // bacaan yang memang perlu, meninggalkan hadiah yang tetamu tempah pada
+        // peranti lain terpapar sebagai tempahan orang lain sehingga halaman
+        // dimuat semula. telefonSegerak menjawab tepat-tepat soalan itu.
+        //
+        // `!statusPasti` kekal: nombornya mungkin sepadan sedangkan bacaan
+        // peribadi terakhir memang gagal, dan kini kita ada nombor yang pelayan
+        // sendiri sudah sahkan — tiada sebab untuk terus meneka.
+        if (telefonSegerak !== telefon || !statusPasti) {
+          await segerakKeadaan(telefon);
+        }
+        refreshAll(li);
+        return;
+      }
+
+      const pesan = error.message;
+      const sudah = pesan.includes('sudah_ditempah');
+      const had = pesan.includes('had_capai');
+
+      if (sudah || had) {
+        // Kedua-dua ralat ini dibangkitkan SELEPAS baris tetamu disimpan, jadi
+        // pelayan sudah mengesahkan nombor ini — simpan sebagai identiti.
+        ingatIdentiti(nama, telefon);
+        const hasil = await segerakKeadaan(telefon);
+
+        // Hanya segerakan yang benar-benar menulis boleh bercakap tentang apa
+        // yang gagal. Kalau ia lapuk, bendera modul milik segerakan lain — dan
+        // segerakan yang lebih baharu itulah yang akan menetapkan notanya.
+        if (hasil.terpakai && (!hasil.senarai || !hasil.status)) {
+          // Nota bahagian sudah berkata status tidak dapat disemak — kad lain
+          // mesti dilukis semula supaya tiada satu pun masih mengajak menempah.
+          // Borang ini terselamat kerana refreshAll() melangkau kad berborang.
+          refreshAll();
+          // Tidak dapat disahkan: jangan sekali-kali kata hadiah ini milik orang
+          // lain sedangkan mungkin milik tetamu sendiri.
+          errEl.textContent = sudah
+            ? 'Hadiah ini sudah ditempah. Sila muat semula halaman untuk melihat status terkini.'
+            : `Had ${HAD} tempahan dicapai. Sila muat semula halaman untuk melihat status terkini.`;
+          errEl.classList.remove('hidden');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Sahkan tempahan';
+          return;
+        }
+
+        refreshAll(li);
+        if (myIds.has(giftId)) {
+          paparNota(li, 'Hadiah ini memang sudah ditempah oleh anda sebelum ini.');
+        } else if (had) {
+          paparNota(li, `Anda sudah menempah ${HAD} hadiah. Batalkan salah satu dahulu jika ingin bertukar.`, true);
+        } else if (hasil.terpakai) {
+          paparNota(li, 'Maaf, hadiah ini baru sahaja ditempah orang lain.', true);
+        } else {
+          // Belum pasti siapa pemiliknya — nyatakan fakta pelayan sahaja, jangan
+          // tuduh orang lain, dan jangan suruh muat semula sedangkan segerakan
+          // yang lebih baharu sedang dalam perjalanan.
+          paparNota(li, 'Hadiah ini sudah ditempah.', true);
+        }
+        return;
+      }
+
+      errEl.textContent = mesejRalat(pesan);
+      errEl.classList.remove('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sahkan tempahan';
+    });
+  }
+
+  async function cancel(li: HTMLElement, giftId: number, btn: HTMLButtonElement): Promise<void> {
+    if (!window.confirm('Betul nak batalkan tempahan ini?')) return;
+    const profil = identitiSemasa();
+    if (!profil) {
+      window.alert('Maaf, kami tidak dapat mengenal pasti tempahan anda. Sila muat semula halaman dan cuba sekali lagi.');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Membatalkan…';
+
+    const { data, error } = await supabase
+      .rpc('batal_tempahan', { p_telefon: profil.telefon, p_gift_item_id: giftId })
+      .abortSignal(AbortSignal.timeout(15_000));
+
+    if (error) {
+      btn.disabled = false;
+      btn.textContent = 'Batal tempahan';
+      window.alert('Maaf, ada masalah teknikal. Sila cuba sekali lagi.');
+      return;
+    }
+
+    if (data !== true) {
+      // Bukan ralat sementara: nombor ini memang bukan pemilik tempahan itu
+      // (mungkin sudah dibatalkan di tab lain atau dilepaskan oleh tuan rumah).
+      // Mencuba lagi tidak akan berjaya — paparan kita yang lapuk.
+      await segerakKeadaan(profil.telefon);
+      refreshAll(li);
+      window.alert('Tempahan ini sudah tiada dalam senarai anda. Paparan telah dikemas kini.');
+      return;
+    }
+
+    myIds.delete(giftId);
+    reservedIds.delete(giftId);
+    // Sama seperti tempahan: pembatalan ini sudah masuk, jadi segerakan yang
+    // bertanya sebelum itu tidak boleh menghidupkan semula hadiah ini.
+    syncSeq++;
+    refreshAll(li);
+  }
+
+  /**
+   * `paksa` ialah kad yang mesti dilukis semula. Kad lain yang sedang membuka
+   * borang dibiarkan supaya nama/telefon separuh taip tidak hilang.
+   */
+  function refreshAll(paksa?: HTMLElement): void {
+    renderCount();
+    for (const li of list.querySelectorAll<HTMLElement>('[data-gift-id]')) {
+      if (li !== paksa && li.querySelector('[data-tempah-zone] form')) continue;
+      renderStatus(li, Number(li.dataset.giftId));
+    }
+  }
+
+  /**
+   * Bahagian lain pada halaman ini (Tabung Impian) juga belajar nombor telefon
+   * tetamu. Nombor yang baru sahaja disahkan pelayan di sana mesti terus
+   * membuka tempahan di sini — tanpa menaip semula, dan tanpa muat semula.
+   */
+  function dengarSiaranProfil(e: Event): void {
+    if (siaranSendiri) return;
+
+    const detail = (e as CustomEvent<Partial<ProfilTetamu>>).detail;
+    const telefon = typeof detail?.telefon === 'string' ? detail.telefon.trim() : '';
+    if (telefon === '') return;
+
+    // Sudah selaras dengan nombor ini dan status peribadi memang berjaya
+    // dibaca: tiada apa-apa yang baharu untuk dipelajari. Ini juga yang
+    // menjadikan siaran berulang (nombor sama, sumbangan kedua) percuma.
+    if (telefon === telefonSegerak && statusPasti) return;
+
+    // localStorage mungkin disekat — dalam keadaan itu `detail` sahaja pembawa
+    // nombor ini, jadi simpan dalam ingatan supaya "Batal tempahan" berfungsi.
+    const nama = typeof detail?.nama === 'string' ? detail.nama : '';
+    identitiIngatan = { nama: nama || identitiIngatan?.nama || '', telefon };
+
+    // Disiplin syncSeq di dalam segerakKeadaan() yang memutuskan sama ada
+    // jawapan ini masih layak menulis — siaran yang sampai lewat tidak boleh
+    // menimbus keadaan yang lebih baharu.
+    void segerakKeadaan(telefon).then(() => refreshAll());
+  }
+
+  async function init(): Promise<void> {
+    const failureEl = document.querySelector('[data-hadiah-failure]') as HTMLElement;
+    const kosongEl = document.querySelector('[data-hadiah-kosong]') as HTMLElement;
+    const rows = await loadList({
+      table: 'gift_item',
+      container: list,
+      loading: document.querySelector('[data-hadiah-loading]') as HTMLElement,
+      failure: failureEl,
+      render(g) {
+        const li = el('li', 'flex w-72 shrink-0 snap-center flex-col rounded-xl border border-stone-200 bg-white p-4 text-center');
+        li.dataset.giftId = String(g.id);
+        if (g.gambar_url) {
+          const img = document.createElement('img');
+          img.src = g.gambar_url;
+          img.alt = '';
+          img.loading = 'lazy';
+          img.className = 'mb-3 h-32 w-full rounded-lg object-cover';
+          li.appendChild(img);
+        }
+        // Bersyarat seperti gambar di atas. Lajur pautan ialah NOT NULL DEFAULT
+        // '', jadi baris yang dibuat terus dari Table Editor boleh membawanya
+        // kosong — dan href kosong menuding kembali ke halaman ini sendiri.
+        // Tetamu akan nampak nama hadiah bergaris seperti pautan lalu membuka
+        // salinan kedua /special; pembaca skrin pula melaungkan pautan ke
+        // halaman yang sedang dibaca. Tanpa pautan, nama dipapar sebagai teks.
+        li.appendChild(
+          g.pautan ? linkEl(g.pautan, g.nama) : el('p', 'font-medium', g.nama),
+        );
+        if (g.nota) li.appendChild(el('p', 'mt-1 text-sm text-stone-500', g.nota));
+        const zone = el('div', 'mt-auto pt-3');
+        zone.setAttribute('data-tempah-zone', '');
+        li.appendChild(zone);
+        return li;
+      },
+    });
+
+    if (rows.length === 0) {
+      // loadList() memulangkan senarai kosong untuk DUA sebab yang berlainan:
+      // memang tiada hadiah aktif, atau muatan itu gagal. Dalam kes gagal, nota
+      // ralat di atas sudah pun dipapar dan mesej ini akan bercanggah dengannya
+      // — jadi ia hanya keluar bila nota itu masih tersembunyi.
+      if (failureEl.classList.contains('hidden')) {
+        kosongEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    // Papar hadiah sebagai karusel leret-ke-kanan (sama gaya "Sementara di
+    // Pahang"). loadList() sudah membuang `hidden`; `flex` menjadikannya baris
+    // mendatar, dan initCarousel() menambah titik penunjuk (ia melangkau sendiri
+    // bila hanya ada satu kad). `items-stretch` menyamakan tinggi semua kad
+    // (nama sebaris vs dua baris), dan `mt-auto` pada zon tempahan melekatkan
+    // butang ke bahagian bawah kad supaya barisnya sejajar merentas karusel.
+    // Nota: bila borang tempahan dibuka pada satu kad, kad jiran turut
+    // meregang — pertukaran yang disengajakan demi tinggi yang seragam.
+    list.classList.add('flex');
+    // SENGAJA tanpa gelung, tidak seperti dua karusel yang satu lagi. Gelung
+    // memasang kad cermin melalui cloneNode, dan cloneNode tidak menyalin
+    // pendengar peristiwa. Setiap kawalan pada kad hadiah — butang "Tempah
+    // untuk kami", butang batal, borang tempahan — dipasang dengan pendengar
+    // semasa jalan oleh renderStatus(), jadi kad cermin di sini akan kelihatan
+    // boleh ditempah tetapi mati sepenuhnya bila ditekan. Tiada dalam repo ini
+    // yang dapat mengesannya: tiada ujian, dan kelakuan skrol tidak dapat
+    // diperhatikan langsung. Ruang kosong di tepi kad hujung jauh lebih murah
+    // daripada tetamu yang menekan butang tempah yang tidak berbuat apa-apa.
+    //
+    // Sebagai ganti, barisan bermula pada hadiah KEDUA. Hadiah pertama lantas
+    // mengintai di sebelah kiri, jadi pandangan pertama tetamu ialah baris kad
+    // yang berjiran di kedua-dua belah — rupa yang sama seperti karusel
+    // bergelung, tanpa satu pun salinan kad yang boleh mati apabila ditekan.
+    initCarousel(list, dotsBox, { mulaDi: 1 });
+
+    // Senarai "telah ditempah" (tanpa nama) + status peribadi jika profil ada.
+    // Ralat kedua-dua RPC diperiksa di dalam segerakKeadaan(); kalau senarai
+    // gagal, tempahan orang lain TIDAK boleh dipapar seolah-olah masih kosong.
+    const profil = identitiSemasa();
+    await segerakKeadaan(profil?.telefon ?? null);
+    refreshAll();
+  }
+
+  window.addEventListener(ACARA_PROFIL, dengarSiaranProfil);
+
+  init();
+</script>

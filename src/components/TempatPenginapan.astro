@@ -1,0 +1,78 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+---
+
+<Section id="penginapan" title="Tempat Penginapan" bg="bg-penginapan" muted>
+  <p class="mb-5 text-center text-sm text-stone-600">
+    Pilihan hotel &amp; homestay berdekatan. Tekan mana-mana kad untuk lihat maklumat lanjut.
+  </p>
+  <ul
+    data-penginapan-list
+    class="carousel -mx-6 flex snap-x snap-mandatory items-stretch gap-3 overflow-x-auto px-6 pb-2"
+  >
+    {
+      site.penginapan.stays.map((s) => (
+        <li
+          class="kad-boleh-tekan flex w-72 shrink-0 snap-center flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+          style="text-shadow: none"
+        >
+          <picture>
+            <source srcset={s.imej.replace(/\.jpg$/, '.avif')} type="image/avif" />
+            {/* Saiz intrinsik slot ini. Tanpanya pelayar tidak dapat mengira
+                persilangan untuk gambar yang belum diambil, dan setiap kad
+                akan dimuatkan serentak walaupun ditanda lazy. */}
+            {/* Alt sengaja kosong: nama tempat ini sudah menjadi teks pautan
+                betul-betul di bawah gambar, jadi alt yang mengulanginya
+                membuatkan pembaca skrin menyebut nama yang sama dua kali. */}
+            <img
+              src={s.imej}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              width="288"
+              height="144"
+              class="h-36 w-full object-cover"
+            />
+          </picture>
+          <div class="flex flex-1 flex-col p-4 text-center">
+            <span class="mb-1.5 self-center rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-stone-500 uppercase">
+              {s.jenis}
+            </span>
+            <a href={s.pautan} target="_blank" rel="noopener" class="pautan-luar">
+              {s.nama}
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M7 17 17 7M9 7h8v8" />
+              </svg>
+            </a>
+            {/* Skala dinyatakan penuh. Bintang di sebelah "7.6" dibaca sebagai
+                7.6 daripada 5 oleh sesiapa yang biasa dengan penarafan bintang,
+                dan penginapan terbaik dalam senarai ini pun jadi nampak teruk. */}
+            <p class="mt-auto pt-2 text-sm text-stone-500">
+              {s.rating}/10 · ~RM{s.harga}/malam
+            </p>
+          </div>
+        </li>
+      ))
+    }
+  </ul>
+  <div data-penginapan-dots class="mt-3 hidden justify-center gap-1.5" aria-hidden="true"></div>
+</Section>
+
+<script>
+  import { initCarousel } from '../lib/carousel';
+
+  initCarousel(
+    document.querySelector('[data-penginapan-list]') as HTMLElement,
+    document.querySelector('[data-penginapan-dots]') as HTMLElement,
+    { gelung: true },
+  );
+</script>

@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.astro/
+.env
+.env.*
+!.env.example
+.vercel/
+.DS_Store
+
+# Source art for the /lab/premium spike. The processed AVIF/WebP under
+# public/premium/ is what ships; these originals stay local.
+TEMP ASSETS/
+
+# Agent scratch space.
+.superpowers/
+
+# Source art for the gift registry. The WebP banners under public/gifts/ are
+# what ships; these originals stay local, same arrangement as TEMP ASSETS/.
+Wishlist/
+
+# Source art for the guest pages. The AVIF/JPEG under public/bg/ is what
+# ships; these originals stay local, same arrangement as TEMP ASSETS/.
+/*.png
+/*.jpg
+/*.JPG
+/*.jpeg
+/Places/

@@ -1,0 +1,139 @@
+---
+import LabLayout from '../../layouts/LabLayout.astro';
+
+const probes = [
+  {
+    href: '/lab/motion',
+    n: '01',
+    name: 'Motion',
+    sub: 'Framer Motion · React',
+    covers: 'scroll sequence · tap transition · branch',
+  },
+  {
+    href: '/lab/gsap',
+    n: '02',
+    name: 'GSAP',
+    sub: 'ScrollTrigger · no React',
+    covers: 'pinned scrub · tap timeline · branch (imperative)',
+  },
+  {
+    href: '/lab/combo',
+    n: '03',
+    name: 'Combination',
+    sub: 'Lenis + GSAP + one Motion island',
+    covers: 'smoothed scrub · branch',
+  },
+  {
+    href: '/lab/vanilla',
+    n: '04',
+    name: 'Motion, no React',
+    sub: 'same engine, framework-free API',
+    covers: 'scroll sequence · tap transition · branch',
+  },
+  {
+    href: '/lab/cinema',
+    n: '05',
+    name: 'Cinema',
+    sub: 'self-playing storyboard · GSAP',
+    covers: '3 depth planes · cross-dissolve · Ken Burns · no input needed',
+  },
+  {
+    href: '/lab/invite',
+    n: '06',
+    name: 'The real invite, moved',
+    sub: 'homepage + a subtle motion layer',
+    covers: 'section reveals · card parallax · scroll thread · press feedback',
+  },
+  {
+    href: '/jemputan',
+    n: '07',
+    name: 'Premium',
+    sub: 'envelope → guided scenes · GSAP',
+    covers: 'tap to open · split reveal · 5 cross-dissolving scenes · hands off to /',
+  },
+];
+---
+
+<LabLayout title="Animation lab" tag="index">
+  <section class="lab-section">
+    <p class="lab-eyebrow">Spike</p>
+    <h1 class="lab-h" style="font-size:46px">Animation lab</h1>
+    <p class="lab-p">
+      Throwaway probes for the cinematic invite. Nothing here is wired to the real
+      site — separate branch, separate route, <code>noindex</code>.
+    </p>
+    <p class="lab-p" style="font-size:13px">
+      The bar at the top reports live frame timing. <b>jank</b> counts frames over
+      50&nbsp;ms since load — the number that predicts how this feels on an older
+      phone. Throttle the CPU in devtools to make the differences obvious.
+    </p>
+
+    <div style="display:grid;gap:14px;margin-top:28px">
+      {
+        probes.map((p) => (
+          <a href={p.href} class="lab-card" style="display:block;text-decoration:none">
+            <p class="lab-eyebrow">{p.n} · {p.sub}</p>
+            <p
+              style="font-family:'Cormorant Garamond',serif;font-size:30px;color:var(--dc-ink-strong);margin-top:4px"
+            >
+              {p.name}
+            </p>
+            <p class="lab-p" style="margin-top:6px;font-size:13px">{p.covers}</p>
+          </a>
+        ))
+      }
+    </div>
+
+    <h2 class="lab-h" style="font-size:30px;margin-top:40px">Measured cost</h2>
+    <p class="lab-p" style="font-size:13px">
+      Gzipped JS a page must download before anything animates. Measured from the
+      production build, following the whole import graph.
+    </p>
+    <div class="lab-card" style="margin-top:14px;font-size:13px">
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>
+          {
+            [
+              ['motion — core only', '20.2k', 'scroll, tap, branch'],
+              ['gsap — core only', '26.0k', 'timelines, no scroll machinery'],
+              ['+ ScrollTrigger', '17.0k', 'only if pinning / scrub'],
+              ['React runtime', '59.1k', 'before any animation code'],
+              ['— /lab/cinema total', '27.5k', 'the richest page, the lightest'],
+              ['— /lab/vanilla total', '24.4k', ''],
+              ['— /lab/gsap total', '44.4k', ''],
+              ['— /lab/motion total', '104.8k', ''],
+              ['— /lab/combo total', '152.9k', ''],
+            ].map(([k, v, note]) => (
+              <tr style="border-bottom:1px solid rgba(180,154,106,.22)">
+                <td style="padding:7px 0;color:var(--dc-muted)">{k}</td>
+                <td style="padding:7px 0;text-align:right;font-variant-numeric:tabular-nums;font-weight:700">
+                  {v}
+                </td>
+                <td style="padding:7px 0 7px 12px;color:var(--dc-label);font-size:11px">{note}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+      <p class="lab-p" style="font-size:12px">
+        For scale, the whole invite today ships 54.6k — and 51k of that is the
+        Supabase client.
+      </p>
+    </div>
+
+    <h2 class="lab-h" style="font-size:30px;margin-top:36px">Two findings</h2>
+    <div class="lab-card" style="margin-top:14px">
+      <p class="lab-p" style="margin-top:0;font-size:13px">
+        <b>Motion server-renders its initial state.</b> With
+        <code>client:visible</code> the HTML ships at <code>opacity:0</code> and
+        stays blank until React hydrates — a visibly empty screen on a slow
+        phone. The probes use <code>client:load</code> because of this.
+      </p>
+      <p class="lab-p" style="font-size:13px">
+        <b>Lenis is a no-op on touch by default</b> (<code>syncTouch: false</code>).
+        It smooths mouse wheel, not phones. Forcing it on hijacks native
+        scrolling.
+      </p>
+    </div>
+  </section>
+</LabLayout>

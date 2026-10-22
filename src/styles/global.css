@@ -1,0 +1,368 @@
+@import "tailwindcss";
+
+/* Dokumen di bawah docs/ TIDAK diimbas untuk nama kelas.
+   Pengimbas Tailwind v4 memungut nama kelas daripada mana-mana fail teks dalam
+   projek, bukan hanya fail yang diimport — termasuk spesifikasi dan pelan yang
+   memetik markup dalam blok kod. Tanpa pengecualian ini, satu petikan lama
+   dalam dokumen (contohnya lebar kad yang sudah lama ditukar) terus menghantar
+   peraturan CSS mati kepada setiap tetamu, selama-lamanya. Ini bukan andaian:
+   ia disahkan berlaku pada cabang ini sebelum baris ini ditambah. */
+@source not "../../docs";
+
+/* Portfolio-only files. Their words must never add rules to the live
+   stylesheet, so the scanner skips them like it skips docs/. */
+@source not "../lib/demoClient.ts";
+@source not "../lib/supabase.demo.ts";
+@source not "../content/demo";
+@source not "../components/PortfolioBanner.astro";
+@source not "../../scripts/demo-client.test.mjs";
+@source not "../../scripts/demo-seed.test.mjs";
+@source not "../../scripts/middleware.test.mjs";
+@source not "../../scripts/export-public.sh";
+@source not "../../README.md";
+
+/* Self-hosted. Was 270 KB over nine files from two third-party origins behind
+   a render-blocking stylesheet; this is first-party, latin-only, and costs no
+   extra DNS or TLS. font-display: swap is preserved — text must never be
+   invisible while a font loads. */
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/cormorant-garamond-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/cormorant-garamond-500i.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Cormorant Garamond';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/cormorant-garamond-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Mulish';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/mulish-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Mulish';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/mulish-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Mulish';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/mulish-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Mulish';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/mulish-700.woff2') format('woff2');
+}
+/* One glyph: ﷽ (U+FDFD) in the hero. The unicode-range is what stops the
+   browser fetching this for any other character — the Google-hosted version
+   also pulled a 12 KB Latin subset that rendered nothing. */
+@font-face {
+  font-family: 'Amiri Quran';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+FDFD;
+  src: url('/fonts/amiri-quran-bismillah.woff2') format('woff2');
+}
+/* /jemputan spells the same invocation out letter-by-letter (jemputan.astro's
+   .arab line) instead of using the single U+FDFD ligature, so it needs its
+   own face covering those letters + tashkeel marks: ب ح ر س ل م ن ه ي and
+   fatha/kasra/shadda/sukun/alef-wasla/dagger-alef. Discovered during the
+   visual check for this task — the single-glyph subset above left this text
+   with no Arabic coverage at all, silently falling back to system serif.
+   Scoped to exactly these codepoints (18.6 KB) rather than the full Arabic
+   block (42+ KB) since this is fixed liturgical text, same reasoning as the
+   hero's single-glyph subset. Non-overlapping unicode-range with the face
+   above, so a page only ever fetches the one it actually needs: this stays
+   off `/` and `/special`, and the hero glyph face stays off `/jemputan`. */
+@font-face {
+  font-family: 'Amiri Quran';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+628, U+62D, U+631, U+633, U+644-647, U+64A, U+64E, U+650-652, U+670-671;
+  src: url('/fonts/amiri-quran-arabic.woff2') format('woff2');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Tema "Jemputan" — palet krim & emas, tipografi Cormorant + Mulish.
+   Kebanyakan rupa baharu dipacu dari sini supaya komponen kongsi
+   (termasuk borang RSVP yang tidak disentuh) mewarisi gaya sama.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --dc-shell: #f7f3ec;
+  --dc-ink: #37332d;
+  --dc-ink-strong: #3b362f;
+  --dc-muted: #6b655c;
+  --dc-muted-2: #7a746c;
+  --dc-gold: #b49a6a;
+  --dc-gold-soft: #c7b389;
+  --dc-gold-deep: #8a7a52;
+  --dc-label: #a08f74;
+  --dc-btn: #3a3630;
+  --dc-btn-hover: #2c2925;
+  --dc-btn-text: #f5f1e8;
+}
+
+.dc-body {
+  font-family: 'Mulish', system-ui, -apple-system, sans-serif;
+  color: var(--dc-ink);
+  background: #e7e0d4;
+}
+
+@media (min-width: 620px) {
+  .dc-body {
+    background:
+      /* vignet lembut membingkai tepi supaya ruang PC terasa sengaja */
+      radial-gradient(145% 125% at 50% 38%, transparent 52%, rgba(88, 72, 46, 0.16) 100%),
+      radial-gradient(120% 80% at 15% 0%, rgba(199, 179, 137, 0.3), transparent 55%),
+      radial-gradient(120% 80% at 85% 100%, rgba(125, 144, 128, 0.24), transparent 55%),
+      linear-gradient(160deg, #efe8db 0%, #e6ddcd 50%, #d8ccb6 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+/* Bekas jemputan berpusat — kad krim dengan bayang lembut pada desktop. */
+.dc-shell {
+  position: relative;
+  max-width: 480px;
+  margin-inline: auto;
+  overflow: hidden;
+  background: var(--dc-shell);
+}
+@media (min-width: 620px) {
+  .dc-shell {
+    margin-block: 52px;
+    border-radius: 28px;
+    /* Bayang dalam + bingkai emas halus terapung mengelilingi kad,
+       memberi rupa "jemputan berbingkai" pada skrin lebar. */
+    box-shadow:
+      0 50px 130px -40px rgba(50, 40, 28, 0.6),
+      0 0 0 1px rgba(180, 154, 106, 0.2);
+    outline: 1px solid rgba(180, 154, 106, 0.4);
+    outline-offset: 14px;
+  }
+}
+
+/* ── Butang & input (borang RSVP mewarisi terus dari sini) ── */
+.btn {
+  @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 py-3 text-center font-semibold;
+  background: var(--dc-btn);
+  color: var(--dc-btn-text);
+  letter-spacing: 0.02em;
+  box-shadow: 0 14px 30px -12px rgba(58, 54, 48, 0.6);
+  text-shadow: none;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+.btn:hover {
+  background: var(--dc-btn-hover);
+  transform: translateY(-1px);
+}
+
+.btn-outline {
+  @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-6 py-3 text-center font-semibold;
+  color: #4a453d;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(180, 154, 106, 0.45);
+  letter-spacing: 0.02em;
+  text-shadow: none;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+.btn-outline:hover {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(180, 154, 106, 0.75);
+}
+
+/* Varian kecil untuk butang di dalam kad. Warna dan bentuk sama, cuma tidak
+   selebar kad penuh — satu butang gelap selebar kad menenggelamkan hadiah
+   yang sepatutnya jadi tumpuan. Tinggi kekal 40px, masih selesa ditekan. */
+.btn-kecil {
+  min-height: 2.5rem;
+  padding: 0.5rem 1.15rem;
+  font-size: 0.875rem;
+  box-shadow: 0 8px 18px -10px rgba(58, 54, 48, 0.55);
+}
+
+.input {
+  @apply block w-full min-h-11 rounded-xl px-4 py-3;
+  border: 1px solid rgba(120, 110, 95, 0.28);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--dc-ink);
+  text-shadow: none;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.input:focus {
+  border-color: var(--dc-gold);
+  box-shadow: 0 0 0 3px rgba(180, 154, 106, 0.18);
+}
+.input::placeholder {
+  color: #b3aa9c;
+}
+
+/* Anak panah kustom untuk <select> supaya sepadan dengan tema. */
+select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1l5 5 5-5' fill='none' stroke='%238a7a52' stroke-width='1.5' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  cursor: pointer;
+}
+
+/* ── Tipografi ── */
+.font-display {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+.font-body {
+  font-family: 'Mulish', system-ui, -apple-system, sans-serif;
+}
+
+a {
+  color: var(--dc-gold-deep);
+}
+a:hover {
+  color: #6f6140;
+}
+
+/* ── Pembahagi hiasan (garis · berlian · garis) ── */
+.dc-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px auto 30px;
+}
+.dc-divider::before,
+.dc-divider::after {
+  content: "";
+  height: 1px;
+  width: 34px;
+}
+.dc-divider::before {
+  background: linear-gradient(90deg, transparent, var(--dc-gold-soft));
+}
+.dc-divider::after {
+  background: linear-gradient(90deg, var(--dc-gold-soft), transparent);
+}
+.dc-divider > span {
+  width: 6px;
+  height: 6px;
+  background: var(--dc-gold);
+  transform: rotate(45deg);
+  display: block;
+}
+
+/* Garis pemisah emas lembut di dalam kad. */
+.dc-rule {
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(180, 154, 106, 0.35), transparent);
+}
+
+/* Pautan luar di dalam kad. Garis bawah sahaja terlalu senyap untuk tetamu
+   berumur, jadi ia diberi warna tanah liat hangat dan ikon anak panah kecil —
+   dua isyarat "ini boleh ditekan" yang tidak menuntut sesiapa tahu bahawa
+   teks bergaris bermakna pautan. */
+.pautan-luar {
+  color: #9a5b3c;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(154, 91, 60, 0.45);
+  text-underline-offset: 3px;
+}
+.pautan-luar svg {
+  display: inline-block;
+  width: 0.78em;
+  height: 0.78em;
+  margin-left: 0.2em;
+  vertical-align: -0.02em;
+}
+
+/* Seluruh kad boleh ditekan, bukan nama sahaja — sasaran sebesar ibu jari,
+   yang jauh lebih mesra pada telefon. Caranya satu lapisan tembus pandang
+   yang diregangkan menutupi kad terdekat, jadi kad itu TIDAK menjadi pautan
+   bersarang: masih satu pautan sahaja untuk pembaca skrin dan senarai pautan.
+   Kad yang memakainya mesti mempunyai kedudukan relatif. */
+.kad-boleh-tekan {
+  position: relative;
+}
+.kad-boleh-tekan .pautan-luar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+/* Apa-apa yang perlu kekal boleh ditekan sendiri mesti duduk di atas lapisan
+   itu. Tiada satu pun kad begini yang mempunyai kawalan kedua buat masa ini,
+   tetapi peraturan ini menghalang satu daripada tertanam senyap kemudian. */
+.kad-boleh-tekan button,
+.kad-boleh-tekan a:not(.pautan-luar) {
+  position: relative;
+  z-index: 2;
+}
+
+.carousel {
+  scrollbar-width: none;
+}
+.carousel::-webkit-scrollbar {
+  display: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Seksyen muncul semasa skrol ──
+   Yang menyembunyikan seksyen ialah kelas `anim-sembunyi`, dipasang oleh
+   skrip dalam Section.astro dan HANYA pada seksyen yang bermula di bawah
+   garisan lipatan. Arahnya sengaja begitu: keadaan lalai ialah kelihatan,
+   jadi apa-apa kegagalan JS meninggalkan halaman yang penuh, bukan kosong.
+   Tetamu yang membuka jemputan ini dalam pelayar dalam-aplikasi WhatsApp
+   tidak boleh sesekali berdepan halaman putih. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-anim] {
+    /* Lengkung ini bermula laju dan mendarat perlahan, jadi pergerakannya
+       tertangkap di ekor mata walaupun tetamu sedang meleret. Kelewatan kecil
+       itu memberi ruang kepada bar navigasi bawah — ia meluncur masuk 0.35s
+       selepas hero, dan kalau kedua-duanya bergerak serentak, gerakan bar yang
+       lebih besar itu menenggelamkan seksyen ini terus. */
+    transition:
+      opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s,
+      transform 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s;
+  }
+  [data-anim].anim-sembunyi {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}

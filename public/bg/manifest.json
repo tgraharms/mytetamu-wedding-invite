@@ -1,0 +1,44 @@
+{
+  "hero-bg": {
+    "avif": "/bg/hero-bg-05f3b9e7.avif",
+    "jpg": "/bg/hero-bg-05f3b9e7.jpg",
+    "width": 704,
+    "height": 1251
+  },
+  "bg-butiran": {
+    "avif": "/bg/bg-butiran-1b38602d.avif",
+    "jpg": "/bg/bg-butiran-1b38602d.jpg",
+    "width": 1440,
+    "height": 2627
+  },
+  "bg-rsvp": {
+    "avif": "/bg/bg-rsvp-b6f2c6ee.avif",
+    "jpg": "/bg/bg-rsvp-b6f2c6ee.jpg",
+    "width": 1440,
+    "height": 2629
+  },
+  "bg-lokasi": {
+    "avif": "/bg/bg-lokasi-6ce372d5.avif",
+    "jpg": "/bg/bg-lokasi-6ce372d5.jpg",
+    "width": 768,
+    "height": 1365
+  },
+  "bg-aktiviti": {
+    "avif": "/bg/bg-aktiviti-33f57f33.avif",
+    "jpg": "/bg/bg-aktiviti-33f57f33.jpg",
+    "width": 1440,
+    "height": 2627
+  },
+  "bg-penutup": {
+    "avif": "/bg/bg-penutup-7c1b3998.avif",
+    "jpg": "/bg/bg-penutup-7c1b3998.jpg",
+    "width": 768,
+    "height": 1366
+  },
+  "bg-penginapan": {
+    "avif": "/bg/bg-penginapan-9c41fe2c.avif",
+    "jpg": "/bg/bg-penginapan-9c41fe2c.jpg",
+    "width": 768,
+    "height": 1387
+  }
+}

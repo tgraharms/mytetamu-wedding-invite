@@ -1,0 +1,110 @@
+---
+import Section from './Section.astro';
+---
+
+<Section id="aktiviti" title="Sementara di Pahang" bg="bg-aktiviti" muted>
+  {/* Petunjuk ini hanya dinyahsorok selepas senarai berjaya dimuatkan — kalau
+      tidak, tetamu yang menemui seksyen gagal-muat diberitahu cara menekan kad
+      yang tidak pernah muncul. */}
+  <p data-aktiviti-petunjuk class="mb-5 hidden text-center text-sm text-stone-600">
+    Tekan mana-mana kad untuk buka lokasinya dalam peta.
+  </p>
+  <p data-aktiviti-loading class="text-center text-sm text-stone-500">Memuatkan senarai…</p>
+  <p data-aktiviti-failure class="hidden text-center text-sm text-stone-500">
+    Maaf, senarai tidak dapat dimuatkan buat masa ini. Sila cuba semula sebentar lagi.
+  </p>
+  <ul
+    data-aktiviti-list
+    class="carousel -mx-6 hidden snap-x snap-mandatory gap-3 overflow-x-auto px-6 pb-2"
+  >
+  </ul>
+  <div data-aktiviti-dots class="mt-3 hidden justify-center gap-1.5" aria-hidden="true"></div>
+</Section>
+
+<script>
+  import { loadList, el, linkEl } from '../lib/liveList';
+  import { initCarousel } from '../lib/carousel';
+
+  const container = document.querySelector('[data-aktiviti-list]') as HTMLElement;
+  const dotsBox = document.querySelector('[data-aktiviti-dots]') as HTMLElement;
+
+  loadList({
+    table: 'aktiviti',
+    container,
+    loading: document.querySelector('[data-aktiviti-loading]') as HTMLElement,
+    failure: document.querySelector('[data-aktiviti-failure]') as HTMLElement,
+    render(a) {
+      // Kelas kad-boleh-tekan hanya dipasang bila baris ini benar-benar
+      // mempunyai pautan. Lajur pautan ialah NOT NULL DEFAULT '', jadi baris
+      // yang dibuat terus dari Table Editor boleh membawanya kosong — dan
+      // lapisan regang itu akan menjadikan SELURUH kad satu pautan dengan href
+      // kosong, iaitu pautan yang membawa tetamu kembali ke halaman jemputan
+      // yang sedang mereka baca. Pengawal yang sama sudah ada pada kad hadiah.
+      const li = el(
+        'li',
+        (a.pautan ? 'kad-boleh-tekan ' : '') +
+          'flex w-72 shrink-0 snap-center flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white text-center shadow-sm',
+      );
+      li.style.textShadow = 'none';
+      if (a.imej) {
+        // The AVIF sibling is derived from the JPEG path rather than stored
+        // separately: `imej` lives in the Supabase `aktiviti` table, and
+        // deriving it here means new rows get the smaller file for free with
+        // no data migration. <source> is skipped when the path is a remote
+        // URL, which has no generated sibling.
+        const pic = document.createElement('picture');
+        if (a.imej.startsWith('/places/') && a.imej.endsWith('.jpg')) {
+          const source = document.createElement('source');
+          source.srcset = a.imej.replace(/\.jpg$/, '.avif');
+          source.type = 'image/avif';
+          pic.appendChild(source);
+        }
+        const img = document.createElement('img');
+        img.src = a.imej;
+        img.alt = a.nama;
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        // Intrinsic size of the slot. Without these the browser cannot
+        // compute an intersection for an image it has not fetched, which is
+        // why every card loaded at once despite loading="lazy".
+        img.width = 288;
+        img.height = 144;
+        img.className = 'h-36 w-full object-cover';
+        pic.appendChild(img);
+        li.appendChild(pic);
+      }
+      const body = el('div', 'flex flex-1 flex-col p-4');
+      // Tanpa pautan, nama dipapar sebagai teks biasa: href kosong menuding
+      // kembali ke halaman ini sendiri, dan pembaca skrin akan melaungkannya
+      // sebagai pautan ke halaman yang sedang dibaca.
+      body.appendChild(a.pautan ? linkEl(a.pautan, a.nama) : el('p', 'font-medium', a.nama));
+      if (a.nota) body.appendChild(el('p', 'mt-2 text-sm text-stone-500', a.nota));
+      // Lencana duduk di KAKI kad, bukan bertindih atas gambar — pil yang
+      // terapung di atas foto menutup sebahagian gambar dan nampak kasar.
+      // Pelapik atas automatik menolaknya ke bawah sekali, jadi ia berbaris
+      // rata dengan kaki kad jiran walaupun notanya lebih pendek.
+      if (a.lencana) {
+        const kaki = el('div', 'mt-auto pt-3');
+        const pil = el(
+          'span',
+          'inline-block rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-900',
+          a.lencana,
+        );
+        pil.style.textShadow = 'none';
+        kaki.appendChild(pil);
+        body.appendChild(kaki);
+      }
+      li.appendChild(body);
+      return li;
+    },
+  }).then((rows) => {
+    // Satu baris pun layak: initCarousel() melangkau titik penunjuk sendiri,
+    // tetapi ia jugalah yang memusatkan barisan bila kad muat tanpa leretan.
+    if (!rows || rows.length === 0) return;
+    document.querySelector('[data-aktiviti-petunjuk]')?.classList.remove('hidden');
+    // Carousel jadi flex hanya selepas senarai berjaya dimuatkan
+    // (kelas `hidden` dibuang oleh loadList; `flex` sendiri kalah dengan `hidden`).
+    container.classList.add('flex');
+    initCarousel(container, dotsBox, { gelung: true });
+  });
+</script>

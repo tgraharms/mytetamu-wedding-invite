@@ -1,0 +1,276 @@
+---
+// Muzik latar untuk kad jemputan — butang sentuh-untuk-main yang terapung.
+// Fail audio diletak di public/audio/lagu.m4a (dibekalkan oleh pemilik).
+// AAC-LC mono 48 kbps — 1,408 KB, tanpa beza yang didengari pada kelantangan
+// latar. /jemputan main fail yang sama.
+// Butang sembunyi sendiri jika fail tiada/gagal dimuat.
+import { AUDIO_SRC } from '../lib/portfolioContent';
+---
+
+<div class="muzik-wrap" aria-hidden="false">
+  <button
+    id="muzik-toggle"
+    type="button"
+    class="muzik-btn"
+    aria-pressed="false"
+    aria-label="Main muzik latar"
+    title="Muzik latar"
+  >
+    {/* Nota muzik */}
+    <svg class="ic-note" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+    {/* Garis "senyap" bertindih bila dijeda */}
+    <span class="muzik-slash" aria-hidden="true"></span>
+  </button>
+
+  <audio id="muzik-audio" src={AUDIO_SRC} loop preload="none"></audio>
+</div>
+
+<style>
+  /* Dijajarkan dengan lajur kad jemputan (maks 480px) supaya butang
+     sentiasa di penjuru kanan atas kad, pada semua saiz skrin. */
+  .muzik-wrap {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(480px, 100%);
+    height: 0;
+    z-index: 60;
+    pointer-events: none;
+  }
+
+  .muzik-btn {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    background: rgba(255, 254, 251, 0.82);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 14px 30px -14px rgba(50, 40, 28, 0.55);
+    color: #8a7a52;
+    cursor: pointer;
+    transition:
+      transform 0.2s ease,
+      background 0.2s ease,
+      color 0.2s ease;
+  }
+  .muzik-btn:hover {
+    background: rgba(255, 255, 255, 0.95);
+    transform: translateY(-1px);
+  }
+
+  /* Cincin halus berputar perlahan semasa muzik dimainkan. */
+  .muzik-btn::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1px solid rgba(180, 154, 106, 0);
+    transition: border-color 0.3s ease;
+  }
+  .muzik-btn.is-playing {
+    color: #3a3630;
+  }
+  .muzik-btn.is-playing::before {
+    border-color: rgba(180, 154, 106, 0.55);
+    animation: muzik-spin 6s linear infinite;
+  }
+  .muzik-btn.is-playing .ic-note {
+    animation: muzik-bob 1.6s ease-in-out infinite;
+  }
+
+  /* Garis pepenjuru menandakan "dijeda / senyap". */
+  .muzik-slash {
+    position: absolute;
+    width: 26px;
+    height: 1.6px;
+    background: currentColor;
+    transform: rotate(-45deg);
+    border-radius: 2px;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+  }
+  .muzik-btn.is-playing .muzik-slash {
+    opacity: 0;
+  }
+
+  @keyframes muzik-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes muzik-bob {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-1.5px);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .muzik-btn.is-playing::before,
+    .muzik-btn.is-playing .ic-note {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  const wrap = document.querySelector('.muzik-wrap') as HTMLElement;
+  const btn = document.getElementById('muzik-toggle') as HTMLButtonElement;
+  const audio = document.getElementById('muzik-audio') as HTMLAudioElement;
+  const KEY = 'muzik-latar'; // 'on' | 'off'
+
+  // Sembunyikan butang jika fail audio tiada / tidak boleh dimainkan.
+  audio.addEventListener('error', () => {
+    wrap.style.display = 'none';
+  });
+
+  // "Berbunyi" = sedang main DAN tidak disenyapkan.
+  const isAudible = () => !audio.paused && !audio.muted;
+
+  function syncUI(): void {
+    const on = isAudible();
+    btn.classList.toggle('is-playing', on);
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Jeda muzik latar' : 'Main muzik latar');
+  }
+
+  async function playAudible(): Promise<void> {
+    audio.muted = false;
+    try {
+      await audio.play();
+    } catch {
+      /* disekat — akan dicuba pada gerak-geri pengguna */
+    }
+    syncUI();
+  }
+
+  audio.addEventListener('play', syncUI);
+  audio.addEventListener('pause', syncUI);
+  audio.addEventListener('volumechange', syncUI);
+
+  // Butang: togol bunyi hidup/mati dan simpan pilihan.
+  btn.addEventListener('click', () => {
+    if (isAudible()) {
+      localStorage.setItem(KEY, 'off');
+      audio.pause();
+    } else {
+      localStorage.setItem(KEY, 'on');
+      playAudible();
+    }
+  });
+
+  /* ── Sambungan dari /jemputan ──────────────────────────────────────
+     /jemputan main fail yang sama dan menyimpan kedudukannya sebelum
+     beralih ke sini. Tanpa ini lagu melompat balik ke 0:00 di tengah
+     rangkap — memecahkan penyerahan yang sepatutnya terasa berterusan. */
+  const HANDOFF = 'muzik-handoff';
+  let resumeAt = 0;
+
+  try {
+    const raw = sessionStorage.getItem(HANDOFF);
+    if (raw) {
+      // Sekali guna: satu muat semula kemudian tidak patut melompat lagi.
+      sessionStorage.removeItem(HANDOFF);
+      const h = JSON.parse(raw);
+      // Peralihan halaman berlaku serta-merta, jadi apa-apa yang lebih lama
+      // daripada ini ialah lawatan kemudian dalam tab yang sama, bukan
+      // penyerahan daripada jemputan.
+      if (h && typeof h.at === 'number' && Date.now() - h.at < 10_000) {
+        // Tetamu mendiamkan lagu di /jemputan → hormati pilihan itu di sini.
+        if (h.playing === false) localStorage.setItem(KEY, 'off');
+        else if (typeof h.t === 'number' && h.t > 0) resumeAt = h.t;
+      }
+    }
+  } catch {
+    /* sessionStorage boleh gagal (mod privasi) — muzik mesti tetap berfungsi */
+  }
+
+  // Arm the guest's first gesture as the fallback path — never fetch at load.
+  //
+  // preload="none" alone is not enough: calling play() overrides it, and a
+  // MUTED play() is permitted by mobile autoplay policy, so the old
+  // "play muted, unmute on interaction" fallback quietly pulled the whole
+  // file while the guest was still waiting for the hero image. Audio streams,
+  // so starting at the gesture costs ~150 ms on slow 3G before sound — and by
+  // then the invitation is already on screen.
+  function armGesture(): void {
+    const start = (e?: Event) => {
+      window.removeEventListener('pointerdown', start);
+      window.removeEventListener('keydown', start);
+      window.removeEventListener('scroll', start);
+      window.removeEventListener('touchstart', start);
+      // A tap ON the button is the button's own decision. window pointerdown
+      // fires before click, so starting playback here would make the click
+      // handler see "already audible" and immediately pause it again — the
+      // guest's very first tap would turn the music off AND persist 'off',
+      // which then also kills the /jemputan handoff on every later visit.
+      if (e && btn.contains(e.target as Node)) return;
+      if (localStorage.getItem(KEY) !== 'off') playAudible();
+    };
+    window.addEventListener('pointerdown', start, { once: true, passive: true });
+    window.addEventListener('keydown', start, { once: true });
+    window.addEventListener('scroll', start, { once: true, passive: true });
+    window.addEventListener('touchstart', start, { once: true, passive: true });
+  }
+
+  function beginPlayback(immediate: boolean): void {
+    // Cold visit: nothing is fetched until the guest's first gesture. A muted
+    // play() is permitted by mobile autoplay policy, so attempting playback
+    // here would override preload="none" and pull the whole file while the
+    // guest is still waiting for the hero image.
+    //
+    // Handoff from /jemputan: the opposite. The guest tapped the seal, the
+    // song is mid-verse and already in cache, and going silent at the page
+    // boundary is the one seam this handoff exists to hide. So try to play at
+    // once, fall back to muted if the browser blocks it, and arm the gesture
+    // as the backstop that unmutes.
+    if (immediate) {
+      audio.muted = false;
+      audio.play().then(syncUI).catch(() => {
+        audio.muted = true;
+        audio.play().catch(() => {});
+      });
+    }
+    armGesture();
+  }
+
+  if (localStorage.getItem(KEY) !== 'off') {
+    if (resumeAt > 0) {
+      /* Melompat dahulu, main kemudian. `currentTime` tidak melekat sebelum
+         metadata wujud, dan preload="none" bermakna ia belum ada — main dulu
+         akan membunyikan mula lagu sekejap sebelum melompat. */
+      const seekThenPlay = () => {
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          audio.currentTime = Math.min(resumeAt, audio.duration - 0.1);
+        }
+        beginPlayback(true);
+      };
+      if (audio.readyState >= 1) {
+        seekThenPlay();
+      } else {
+        audio.addEventListener('loadedmetadata', seekThenPlay, { once: true });
+        // Jangan sesekali tersekat tanpa muzik jika metadata gagal dimuat.
+        audio.addEventListener('error', () => beginPlayback(true), { once: true });
+        audio.load();
+      }
+    } else {
+      beginPlayback(false);
+    }
+  }
+</script>

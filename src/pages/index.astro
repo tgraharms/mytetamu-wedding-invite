@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { site } from '../content/site';
+import Hero from '../components/Hero.astro';
+import ButiranMajlis from '../components/ButiranMajlis.astro';
+import SahkanKehadiran from '../components/SahkanKehadiran.astro';
+import CaraKeSana from '../components/CaraKeSana.astro';
+import TempatPenginapan from '../components/TempatPenginapan.astro';
+import SementaraDiPahang from '../components/SementaraDiPahang.astro';
+import SalamKaut from '../components/SalamKaut.astro';
+import Penutup from '../components/Penutup.astro';
+import QuickNav from '../components/QuickNav.astro';
+import MuzikLatar from '../components/MuzikLatar.astro';
+---
+
+<Layout title={site.meta.title} description={site.meta.description}>
+  <QuickNav />
+  <MuzikLatar />
+  <main class="dc-shell pb-24">
+    <Hero />
+    <ButiranMajlis />
+    <SahkanKehadiran />
+    <CaraKeSana />
+    <SementaraDiPahang />
+    <TempatPenginapan />
+    <SalamKaut />
+    <Penutup />
+  </main>
+</Layout>

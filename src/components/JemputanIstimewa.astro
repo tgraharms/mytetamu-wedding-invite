@@ -1,0 +1,64 @@
+<div
+  id="jemputan-istimewa"
+  class="fixed inset-0 z-[70] hidden items-center justify-center bg-stone-900/60 p-6"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="istimewa-title"
+>
+  <div class="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
+    <p class="text-3xl" aria-hidden="true">✨</p>
+    <h2 id="istimewa-title" class="mt-2 text-lg font-semibold">Jemputan Istimewa</h2>
+    <p class="mt-2 text-sm leading-relaxed text-stone-600">
+      Untuk keluarga dan kawan-kawan terdekat.
+    </p>
+    <p class="mt-4 rounded-xl bg-stone-50 px-4 py-3 text-sm leading-relaxed text-stone-600">
+      <strong class="font-semibold text-stone-800">Wishlist</strong> disediakan sebagai
+      inspirasi hadiah bagi mereka yang bercadang nak beri hadiah.
+    </p>
+    <button id="istimewa-ok" type="button" class="btn mt-5 w-full" disabled>
+      Teruskan (3)
+    </button>
+    <p class="mt-3 text-xs text-stone-400">Mesej ini hanya muncul sekali.</p>
+  </div>
+</div>
+
+<script>
+  const SEEN_KEY = 'istimewa-seen';
+  const overlay = document.getElementById('jemputan-istimewa')!;
+  const okBtn = document.getElementById('istimewa-ok') as HTMLButtonElement;
+
+  let seen = false;
+  try {
+    seen = localStorage.getItem(SEEN_KEY) !== null;
+  } catch {
+    /* abaikan */
+  }
+
+  if (!seen) {
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    document.body.style.overflow = 'hidden';
+
+    let saat = 3;
+    const timer = setInterval(() => {
+      saat--;
+      if (saat <= 0) {
+        clearInterval(timer);
+        okBtn.disabled = false;
+        okBtn.textContent = 'Teruskan';
+      } else {
+        okBtn.textContent = `Teruskan (${saat})`;
+      }
+    }, 1000);
+
+    okBtn.addEventListener('click', () => {
+      overlay.remove();
+      document.body.style.overflow = '';
+      try {
+        localStorage.setItem(SEEN_KEY, new Date().toISOString());
+      } catch {
+        /* abaikan */
+      }
+    });
+  }
+</script>

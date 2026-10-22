@@ -1,0 +1,295 @@
+---
+import Section from './Section.astro';
+---
+
+<Section id="tabung" title="Tabung Impian">
+  <p class="-mt-4 mb-6 text-center text-sm text-stone-600">
+    Bantu kami capai impian pertama sebagai suami isteri. Setiap sumbangan amat kami hargai. 💛
+  </p>
+  <p data-tabung-loading class="text-center text-sm text-stone-500">Memuatkan tabung…</p>
+  <p data-tabung-failure class="hidden text-center text-sm text-stone-500">
+    Maaf, tabung tidak dapat dimuatkan buat masa ini. Sila cuba semula sebentar lagi.
+  </p>
+  <div data-tabung-list class="hidden space-y-4"></div>
+</Section>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { el } from '../lib/liveList';
+  import {
+    ACARA_PROFIL,
+    saveProfil,
+    getPrefillNama,
+    getPrefillTelefon,
+    type ProfilTetamu,
+  } from '../lib/guest';
+
+  const list = document.querySelector('[data-tabung-list]') as HTMLElement;
+  const loading = document.querySelector('[data-tabung-loading]') as HTMLElement;
+  const failure = document.querySelector('[data-tabung-failure]') as HTMLElement;
+
+  const fmt = (n: number) =>
+    `RM ${n.toLocaleString('ms-MY', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+  interface Goal {
+    id: number;
+    nama: string;
+    sasaran: number;
+    emoji: string;
+  }
+
+  const totals = new Map<number, { jumlah: number; penyumbang: number }>();
+
+  // Setiap borang tabung yang sudah dibina. Siaran identiti boleh tiba pada
+  // bila-bila masa selepas itu, jadi kesemuanya perlu dicapai semula.
+  const borang: HTMLFormElement[] = [];
+
+  // Nama/telefon yang KAMI isikan ke dalam sesuatu borang. Perbandingan inilah
+  // yang membezakan medan yang masih "seperti kami tinggalkan" daripada medan
+  // yang tetamu sendiri sudah taip — yang kedua tidak boleh disentuh.
+  const prefill = new WeakMap<HTMLFormElement, { nama: string; telefon: string }>();
+
+  // Identiti terakhir yang disiarkan pada halaman ini. localStorage boleh disekat
+  // (mod privasi) — dalam keadaan itu siaran sahaja pembawa nombor tersebut, dan
+  // kad tabung mungkin belum siap dibina semasa ia tiba, jadi ia disimpan di sini
+  // juga supaya kad yang dibina kemudian tetap terisi.
+  let identitiSiaran: ProfilTetamu | null = null;
+
+  /**
+   * Isi satu medan kalau ia masih kosong atau masih memegang nilai yang kami
+   * sendiri isikan sebelum ini. Memulangkan garis dasar baharu untuk medan itu —
+   * hanya medan yang benar-benar ditulis mendapat garis dasar baharu, supaya
+   * taipan tetamu tidak pernah tersilap diambil sebagai isian kami.
+   */
+  function isikanMedan(input: HTMLInputElement, nilai: string, asal: string): string {
+    if (nilai === '' || (input.value !== '' && input.value !== asal)) return asal;
+    input.value = nilai;
+    return nilai;
+  }
+
+  function isikanIdentiti(form: HTMLFormElement, nama: string, telefon: string): void {
+    const asal = prefill.get(form) ?? { nama: '', telefon: '' };
+    prefill.set(form, {
+      nama: isikanMedan(form.elements.namedItem('nama') as HTMLInputElement, nama, asal.nama),
+      telefon: isikanMedan(
+        form.elements.namedItem('telefon') as HTMLInputElement,
+        telefon,
+        asal.telefon,
+      ),
+    });
+  }
+
+  /**
+   * Bahagian lain pada halaman ini (Cadangan Hadiah) juga belajar nombor telefon
+   * tetamu. Nombor yang baru sahaja disahkan pelayan di sana mesti terus mengisi
+   * borang tabung di sini — tanpa menaip semula, dan tanpa muat semula. Hanya
+   * medan yang kosong atau yang masih memegang isian kami disentuh, jadi taipan
+   * separuh siap tidak pernah hilang. Tiada apa-apa dihantar, dan jumlah mahupun
+   * palang kemajuan tidak diusik.
+   */
+  function dengarSiaranProfil(e: Event): void {
+    const detail = (e as CustomEvent<Partial<ProfilTetamu>>).detail;
+    const nama = typeof detail?.nama === 'string' ? detail.nama.trim() : '';
+    const telefon = typeof detail?.telefon === 'string' ? detail.telefon.trim() : '';
+    if (nama === '' && telefon === '') return;
+
+    identitiSiaran = { nama: nama || identitiSiaran?.nama || '', telefon: telefon || identitiSiaran?.telefon || '' };
+    for (const form of borang) isikanIdentiti(form, nama, telefon);
+  }
+
+  /**
+   * `tabung_tiada` dibangkitkan bila tuan rumah menutup sesuatu tabung sedangkan
+   * borangnya masih terbuka pada skrin tetamu. Mencuba lagi TIDAK akan berjaya,
+   * jadi ayat umum "sila cuba sekali lagi" hanya memusingkan tetamu dalam
+   * gelung — nyatakan terus apa yang berlaku dan minta halaman dimuat semula.
+   */
+  function mesejRalat(message: string): string {
+    if (message.includes('telefon_tidak_sah')) return 'Sila semak nombor telefon anda.';
+    if (message.includes('tabung_tiada')) {
+      return 'Maaf, tabung ini sudah tidak menerima sumbangan. Sila muat semula halaman untuk melihat tabung yang masih terbuka.';
+    }
+    return 'Maaf, ada masalah teknikal. Sila cuba sekali lagi.';
+  }
+
+  function renderBar(card: HTMLElement, goal: Goal): void {
+    const t = totals.get(goal.id) ?? { jumlah: 0, penyumbang: 0 };
+    const pct = Math.min(100, Math.round((t.jumlah / goal.sasaran) * 100));
+    (card.querySelector('[data-bar]') as HTMLElement).style.width = `${pct}%`;
+    (card.querySelector('[data-amaun]') as HTMLElement).textContent =
+      `${fmt(t.jumlah)} / ${fmt(goal.sasaran)}`;
+    (card.querySelector('[data-penyumbang]') as HTMLElement).textContent =
+      t.penyumbang === 0
+        ? 'Jadilah penyumbang pertama!'
+        : `${t.penyumbang} orang telah menyumbang`;
+    (card.querySelector('[data-tercapai]') as HTMLElement).classList.toggle(
+      'hidden',
+      t.jumlah < goal.sasaran,
+    );
+  }
+
+  function buildCard(goal: Goal): HTMLElement {
+    const card = el('div', 'rounded-xl border border-stone-200 bg-white p-4');
+
+    const head = el('div', 'flex items-center justify-between');
+    const title = el('p', 'font-medium');
+    title.textContent = `${goal.emoji} ${goal.nama}`;
+    head.appendChild(title);
+    const badge = el('span', 'hidden rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800', 'Tercapai 🎉');
+    badge.setAttribute('data-tercapai', '');
+    head.appendChild(badge);
+    card.appendChild(head);
+
+    const track = el('div', 'mt-3 h-2.5 overflow-hidden rounded-full bg-stone-100');
+    const bar = el('div', 'h-full rounded-full bg-green-600 transition-all duration-700');
+    bar.setAttribute('data-bar', '');
+    bar.style.width = '0%';
+    track.appendChild(bar);
+    card.appendChild(track);
+
+    const amaun = el('p', 'mt-2 text-sm font-medium');
+    amaun.setAttribute('data-amaun', '');
+    card.appendChild(amaun);
+    const orang = el('p', 'text-xs text-stone-500');
+    orang.setAttribute('data-penyumbang', '');
+    card.appendChild(orang);
+
+    const openBtn = el('button', 'btn mt-4 w-full', 'Sumbang') as HTMLButtonElement;
+    openBtn.type = 'button';
+    card.appendChild(openBtn);
+
+    const panel = el('div', 'hidden mt-4 space-y-4 border-t border-stone-200 pt-4');
+
+    const step1 = el('div', '');
+    step1.appendChild(el('p', 'text-sm font-medium', '1 · Imbas QR DuitNow dan buat pindahan'));
+    const qr = document.createElement('img');
+    qr.src = '/qr-duitnow.png';
+    qr.alt = 'Kod QR DuitNow';
+    qr.width = 160;
+    qr.height = 160;
+    qr.loading = 'lazy';
+    qr.className = 'mx-auto mt-2 rounded-xl';
+    step1.appendChild(qr);
+    panel.appendChild(step1);
+
+    const step2 = el('div', '');
+    step2.appendChild(el('p', 'text-sm font-medium', '2 · Rekodkan sumbangan anda'));
+    const form = document.createElement('form');
+    form.noValidate = true;
+    form.className = 'mt-2 space-y-3';
+    // autocomplete: seluruh reka bentuk identiti bergantung pada tetamu menaip
+    // semula nombornya pada peranti baharu. Tanpa token ini sistem pengendali
+    // tidak pernah menawarkan kenalan yang tersimpan.
+    form.innerHTML = `
+      <input name="nama" type="text" required autocomplete="name" placeholder="Nama anda" class="input" />
+      <input name="telefon" type="tel" required autocomplete="tel" placeholder="No. telefon (cth. 0123456789)" class="input" />
+      <input name="amaun" type="number" required min="1" max="1000" step="1" placeholder="Jumlah (RM)" class="input" />
+      <p data-form-error role="status" class="hidden text-sm text-red-600"></p>
+      <button type="submit" class="btn w-full">Hantar</button>
+    `;
+    // Prefill: localStorage dahulu, jatuh balik ke identiti yang disiarkan supaya
+    // tetamu dalam mod privasi tidak perlu menaipnya semula.
+    borang.push(form);
+    isikanIdentiti(
+      form,
+      getPrefillNama() || identitiSiaran?.nama || '',
+      getPrefillTelefon() || identitiSiaran?.telefon || '',
+    );
+    step2.appendChild(form);
+    panel.appendChild(step2);
+
+    const thanks = el('div', 'hidden rounded-xl border border-green-200 bg-green-50 p-4 text-center text-sm text-green-800', 'Terima kasih atas sumbangan anda! 💝');
+    // Ralat dan ucapan terima kasih didedahkan dengan menanggalkan sifat papar
+    // "none" sahaja — tanpa kawasan langsung, pembaca skrin tidak diberitahu
+    // apa-apa pada saat penghantaran ditolak atau diterima. Ikut cara yang sama
+    // seperti borang RSVP (SahkanKehadiran.astro).
+    thanks.setAttribute('role', 'status');
+    panel.appendChild(thanks);
+    card.appendChild(panel);
+
+    openBtn.addEventListener('click', () => {
+      panel.classList.toggle('hidden');
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const namaEl = form.elements.namedItem('nama') as HTMLInputElement;
+      const telefonEl = form.elements.namedItem('telefon') as HTMLInputElement;
+      const amaunEl = form.elements.namedItem('amaun') as HTMLInputElement;
+      const errEl = form.querySelector('[data-form-error]') as HTMLElement;
+      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+
+      const nama = namaEl.value.trim();
+      const telefon = telefonEl.value.trim();
+      const amaun = Number.parseInt(amaunEl.value, 10);
+      if (nama === '' || telefon === '' || !Number.isInteger(amaun) || amaun < 1 || amaun > 1000) {
+        errEl.textContent = 'Sila isi nama, nombor telefon, dan jumlah antara RM1 hingga RM1000.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      errEl.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Menghantar…';
+
+      let mesej = '';
+      try {
+        const { error } = await supabase
+          .rpc('sumbang', { p_telefon: telefon, p_nama: nama, p_goal_id: goal.id, p_amaun: amaun })
+          .abortSignal(AbortSignal.timeout(15_000));
+        if (error) mesej = mesejRalat(error.message);
+      } catch {
+        mesej = 'Maaf, ada masalah teknikal. Sila cuba sekali lagi.';
+      }
+
+      if (mesej !== '') {
+        errEl.textContent = mesej;
+        errEl.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Hantar';
+        return;
+      }
+
+      saveProfil(nama, telefon);
+      const t = totals.get(goal.id) ?? { jumlah: 0, penyumbang: 0 };
+      totals.set(goal.id, { jumlah: t.jumlah + amaun, penyumbang: t.penyumbang + 1 });
+      renderBar(card, goal);
+      form.classList.add('hidden');
+      thanks.classList.remove('hidden');
+    });
+
+    return card;
+  }
+
+  async function init(): Promise<void> {
+    try {
+      const [goalsRes, totalsRes] = await Promise.all([
+        supabase.from('fund_goal').select('*').order('urutan').abortSignal(AbortSignal.timeout(15_000)),
+        supabase.rpc('tabung_totals').abortSignal(AbortSignal.timeout(15_000)),
+      ]);
+      // Kedua-dua jawapan mesti diperiksa. Shim postgrest hanya mencuba semula
+      // GET, jadi tabung_totals (POST, satu percubaan sahaja) ialah yang paling
+      // mungkin gagal — dan kalau kegagalannya diabaikan, `totals` kekal kosong
+      // lalu tabung yang sudah berbaki ribuan ringgit dipapar sebagai RM 0
+      // dengan penuh yakin. Lebih baik berterus terang bahawa ia gagal dimuat.
+      if (goalsRes.error || !goalsRes.data || totalsRes.error) {
+        throw new Error('tabung gagal dimuat');
+      }
+      for (const row of totalsRes.data ?? []) {
+        totals.set(row.goal_id, { jumlah: Number(row.jumlah), penyumbang: Number(row.penyumbang) });
+      }
+      loading.classList.add('hidden');
+      for (const goal of goalsRes.data as Goal[]) {
+        const card = buildCard(goal);
+        list.appendChild(card);
+        renderBar(card, goal);
+      }
+      list.classList.remove('hidden');
+    } catch {
+      loading.classList.add('hidden');
+      failure.classList.remove('hidden');
+    }
+  }
+
+  window.addEventListener(ACARA_PROFIL, dengarSiaranProfil);
+
+  init();
+</script>

@@ -1,0 +1,17 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+import { QR_SRC } from '../lib/portfolioContent';
+---
+
+<Section id="salam-kaut" title="Salam Kaut">
+  <p class="text-center text-stone-600">{site.salamKaut.framing}</p>
+  <img
+    src={QR_SRC}
+    alt="Kod QR Salam Kaut"
+    width="200"
+    height="200"
+    loading="lazy"
+    class="mx-auto mt-6 rounded-xl"
+  />
+</Section>

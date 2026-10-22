@@ -1,0 +1,82 @@
+---
+/**
+ * Shell for the cinematic invite at /jemputan.
+ *
+ * Separate from Layout.astro because the invite needs `Great Vibes` (which the
+ * main pages never use) and separate from LabLayout because it must carry OG
+ * tags and must not carry the instrumentation bar.
+ *
+ * The font link is the union of both: `Amiri Quran` for the bismillah and
+ * `Great Vibes` for the script lettering. LabLayout omitted Amiri Quran, so the
+ * bismillah on /lab/premium had been silently falling back to Cormorant.
+ */
+import '../styles/global.css';
+import PortfolioBanner from '../components/PortfolioBanner.astro';
+import { PORTFOLIO } from '../lib/portfolio';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const ogUrl = new URL(Astro.url.pathname, Astro.site).href;
+const ogImage = new URL('/og-2026.jpg', Astro.site).href;
+---
+
+<!doctype html>
+<html lang="ms">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/fonts/cormorant-garamond-500.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/mulish-400.woff2" as="font" type="font/woff2" crossorigin />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={ogUrl} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <!-- Handed out as a direct link, like /special. Nothing to gain from being
+         indexed, and the page auto-navigates to / when the sequence ends, so a
+         search visitor landing here gets bounced somewhere they did not ask
+         for. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- is:global — slotted page content does not carry this layout's scope
+         hash, so a scoped rule would never match it. -->
+    <style is:global>
+      /* Geometry copied verbatim from LabLayout's .lab-shell, including the
+         100vh (not 100svh), so the page renders exactly as it was tuned and
+         measured on a real phone. */
+      .jemputan-shell {
+        max-width: 480px;
+        margin-inline: auto;
+        background: var(--dc-shell);
+        min-height: 100vh;
+      }
+
+      /* Self-hosted. Only /jemputan uses Great Vibes, so it stays out of
+         global.css — declaring it there would put 34.7 KB on every page. */
+      @font-face {
+        font-family: 'Great Vibes';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('/fonts/great-vibes-400.woff2') format('woff2');
+      }
+    </style>
+  </head>
+  <body class="dc-body antialiased">{PORTFOLIO && <PortfolioBanner overlay />}
+    <main class="jemputan-shell">
+      <slot />
+    </main>
+  </body>
+</html>

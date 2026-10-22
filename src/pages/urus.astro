@@ -1,0 +1,483 @@
+---
+// Papan urus wishlist — untuk Zul sahaja. HTML dilindungi Basic Auth di edge
+// (middleware.ts); DATA dilindungi berasingan oleh frasa laluan yang disemak
+// bcrypt dalam DB, kerana JS klien tidak boleh guna semula rahsia Basic Auth.
+// Sengaja TIADA dalam BUDGETS scripts/budget.mjs — bukan halaman tetamu.
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Urus Wishlist" description="Papan urus dalaman" noindex>
+  <main class="mx-auto max-w-3xl px-4 py-10">
+    {/* Keadaan awal halaman ini SENTIASA skrin kunci, jadi penjajaran tengah
+        ditulis terus dalam markup — bukan ditambah oleh skrip. Kalau ia
+        bergantung pada JS, tajuk dan borang akan terpapar rata kiri dahulu lalu
+        melompat ke tengah bila modul defer tiba. modKunci(false) menanggalkannya
+        semula bila papan urus dibuka. */}
+    <h1 class="text-2xl font-semibold text-center">Urus Wishlist</h1>
+
+    {/* method="post" walaupun JS sentiasa preventDefault(): skrip ini dimuat
+        sebagai modul DEFER, jadi sebelum ia tiba borang ini masih boleh
+        dihantar. Dengan GET (default HTML) frasa laluan akan mendarat dalam
+        /urus?kunci=… — sejarah pelayar, log permintaan, dan header Referer
+        setiap subsumber. Itulah kebocoran yang tulisan tanpa kesan dalam
+        semak_kunci reka untuk mustahilkan di lapisan API. Tiada `action`. */}
+    <form data-kunci-form method="post" class="mx-auto mt-6 max-w-sm space-y-3">
+      <input
+        name="kunci"
+        type="password"
+        required
+        autocomplete="current-password"
+        aria-label="Frasa laluan urus"
+        placeholder="Frasa laluan urus"
+        class="input"
+      />
+      <p data-kunci-error aria-live="polite" class="hidden text-sm text-red-600">Frasa laluan salah.</p>
+      <button type="submit" class="btn w-full">Masuk</button>
+    </form>
+
+    <p data-urus-loading class="hidden mt-6 text-sm text-stone-500">Memuatkan…</p>
+
+    {/* Blok gagal SENTIASA membawa jalan pulang: butang cuba lagi (kunci yang
+        sama) dan borang di atas dibuka semula. Tanpa itu, satu timeout pada
+        talian mudah alih meninggalkan halaman tanpa apa-apa butang langsung. */}
+    <div data-urus-failure class="hidden mx-auto mt-6 max-w-sm space-y-3">
+      <p aria-live="polite" class="text-sm text-red-600">
+        Maaf, data tidak dapat dimuatkan. Cuba semula.
+      </p>
+      <button data-cuba-lagi type="button" class="btn-outline w-full">Cuba lagi</button>
+    </div>
+
+    <div data-urus-dash class="hidden mt-8 space-y-6">
+      <div class="flex items-center justify-between gap-3">
+        <p data-jumlah class="text-sm text-stone-600"></p>
+        <button
+          data-log-keluar
+          type="button"
+          class="shrink-0 rounded-xl border border-stone-300 px-3 py-1.5 text-xs text-stone-600"
+        >Log keluar</button>
+      </div>
+
+      {/* Dua kerja berasingan: data tetamu bertambah tanpa had (tiga puluh
+          tempahan pada minggu majlis) sedangkan senarai hadiah kekal lebih
+          kurang sama. Kalau kandungan diletak di bawah, benda yang paling
+          kerap disunting akan tertimbus di bawah benda yang paling cepat
+          membesar. */}
+      {/* Sengaja butang biasa, bukan tablist/tab: peranan tab menjanjikan
+          navigasi Kiri/Kanan/Home/End dan hubungan tab↔panel yang widget ini
+          tidak laksanakan, jadi pengguna pembaca skrin yang menekan Kanan tidak
+          mendapat apa-apa. Sebagai butang biasa tiada janji yang dimungkiri —
+          keempat-empatnya memang dalam susunan fokus dan Enter/Space berfungsi.
+          aria-pressed sah pada butang (aria-selected tidak); nilai awal di sini
+          mesti sepadan dengan panel yang nampak dan dengan nilai awal tabSemasa
+          (TAB_LALAI), iaitu tab yang dipilih pilihTab() di hujung muatDash.
+          role="group" mengekalkan makna aria-label — pada
+          div tanpa peranan, label itu diabaikan. */}
+      <div role="group" aria-label="Bahagian papan urus" class="flex flex-wrap gap-2">
+        <button data-tab="rsvp" type="button" aria-pressed="true" class="rounded-xl border px-3 py-1.5 text-sm">RSVP</button>
+        <button data-tab="doa" type="button" aria-pressed="false" class="rounded-xl border px-3 py-1.5 text-sm">Doa</button>
+        <button data-tab="tetamu" type="button" aria-pressed="false" class="rounded-xl border px-3 py-1.5 text-sm">Tetamu</button>
+        <button data-tab="kandungan" type="button" aria-pressed="false" class="rounded-xl border px-3 py-1.5 text-sm">Kandungan</button>
+      </div>
+
+      <div data-panel="rsvp" role="region" aria-label="RSVP"></div>
+
+      <div data-panel="doa" role="region" aria-label="Doa" class="hidden"></div>
+
+      <div data-panel="tetamu" role="region" aria-label="Tetamu" class="hidden space-y-10">
+        <section>
+          <h2 class="text-lg font-medium">Tempahan hadiah</h2>
+          <ul data-senarai-tempahan class="mt-3 space-y-2"></ul>
+        </section>
+        <section>
+          <h2 class="text-lg font-medium">Sumbangan tabung</h2>
+          <ul data-senarai-sumbangan class="mt-3 space-y-2"></ul>
+        </section>
+      </div>
+
+      <div data-panel="kandungan" role="region" aria-label="Kandungan" class="hidden"></div>
+    </div>
+  </main>
+</Layout>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { el } from '../lib/liveList';
+  import { pasangDoa } from '../lib/urusDoa';
+  import { pasangKandungan } from '../lib/urusKandungan';
+  import { pasangRsvp } from '../lib/urusRsvp';
+
+  const KUNCI_KEY = 'kunci-urus';
+
+  const form = document.querySelector('[data-kunci-form]') as HTMLFormElement;
+  const kunciError = document.querySelector('[data-kunci-error]') as HTMLElement;
+  const loading = document.querySelector('[data-urus-loading]') as HTMLElement;
+  const failure = document.querySelector('[data-urus-failure]') as HTMLElement;
+  const cubaLagi = document.querySelector('[data-cuba-lagi]') as HTMLButtonElement;
+  const logKeluar = document.querySelector('[data-log-keluar]') as HTMLButtonElement;
+  const dash = document.querySelector('[data-urus-dash]') as HTMLElement;
+  const jumlahEl = document.querySelector('[data-jumlah]') as HTMLElement;
+  const senaraiTempahan = document.querySelector('[data-senarai-tempahan]') as HTMLElement;
+  const senaraiSumbangan = document.querySelector('[data-senarai-sumbangan]') as HTMLElement;
+  const tabBtns = [...document.querySelectorAll('[data-tab]')] as HTMLButtonElement[];
+  const panels = [...document.querySelectorAll('[data-panel]')] as HTMLElement[];
+  const panelKandungan = document.querySelector('[data-panel="kandungan"]') as HTMLElement;
+  const panelRsvp = document.querySelector('[data-panel="rsvp"]') as HTMLElement;
+  const panelDoa = document.querySelector('[data-panel="doa"]') as HTMLElement;
+
+  // localStorage dibalut try/catch seperti biasa (mod privasi).
+  const getKunci = (): string => {
+    try { return localStorage.getItem(KUNCI_KEY) ?? ''; } catch { return ''; }
+  };
+  const setKunci = (k: string): void => {
+    try { localStorage.setItem(KUNCI_KEY, k); } catch { /* abaikan */ }
+  };
+  const clearKunci = (): void => {
+    try { localStorage.removeItem(KUNCI_KEY); } catch { /* abaikan */ }
+  };
+
+  const masa = (iso: string): string => new Date(iso).toLocaleString('ms-MY');
+
+  // amaun/rm ialah NUMERIC — PostgREST menghantarnya sebagai teks berskala
+  // ("50.00"), jadi Number() dahulu sebelum diformat.
+  const wang = (n: number | string): string =>
+    Number(n).toLocaleString('ms-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  interface Tempahan { id: number; hadiah: string; hadiah_aktif: boolean; nama: string; telefon: string; pada: string; }
+  interface Sumbangan { id: number; tabung: string; nama: string; telefon: string; amaun: number; pada: string; }
+  interface Overview { tempahan: Tempahan[]; sumbangan: Sumbangan[]; jumlah: { tempahan: number; sumbangan: number; rm: number }; }
+
+  /**
+   * Skrin kunci ialah tajuk + satu borang kecil pada halaman yang kosong, jadi
+   * ia dipusatkan. Papan urus pula rata kiri seperti mana-mana jadual data —
+   * memusatkan baris tempahan akan menyusahkan pembacaan. Sebab itu penjajaran
+   * ditukar mengikut keadaan, bukan ditetapkan sekali dalam markup.
+   */
+  const tajuk = document.querySelector('h1') as HTMLElement;
+  function modKunci(hidup: boolean): void {
+    tajuk.classList.toggle('text-center', hidup);
+    form.classList.toggle('mx-auto', hidup);
+    failure.classList.toggle('mx-auto', hidup);
+  }
+
+  /** Papar borang kunci sahaja. `salah` = tunjuk mesej frasa laluan salah. */
+  function showPrompt(salah: boolean): void {
+    dash.classList.add('hidden');
+    loading.classList.add('hidden');
+    failure.classList.add('hidden');
+    form.classList.remove('hidden');
+    kunciError.classList.toggle('hidden', !salah);
+    modKunci(true);
+  }
+
+  interface BarisOpts {
+    teks: string;
+    /** Nilai yang mesti kekal nampak (mis. jumlah RM) — di luar garis truncate. */
+    nilai?: string;
+    subteks: string;
+    amaran?: string;
+    butang: string;
+    onKlik: () => void;
+  }
+
+  function baris(o: BarisOpts): HTMLElement {
+    // Semua teks tetamu melalui textContent (el) — nama tetamu ialah vektor
+    // XSS ke halaman admin jika di-innerHTML-kan.
+    const li = el('li', 'flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white p-3');
+    const kiri = el('div', 'min-w-0');
+
+    // Hanya nama hadiah/tabung yang dipotong. Jumlah RM duduk dalam span
+    // `shrink-0` sendiri, kerana ia nilai paling penting dalam baris dan
+    // sebelum ini elipsis pada telefon 375px memakannya.
+    const tajuk = el('div', 'flex items-baseline gap-2');
+    tajuk.appendChild(el('span', 'min-w-0 truncate text-sm font-medium', o.teks));
+    if (o.nilai) tajuk.appendChild(el('span', 'shrink-0 text-sm font-medium', o.nilai));
+    kiri.appendChild(tajuk);
+
+    // `break-words` (overflow-wrap), bukan word-break: nama tetamu boleh
+    // sampai 100 aksara tanpa ruang, dan teks tak boleh pecah dalam anak flex
+    // `min-w-0` akan melimpah keluar kad. word-break pula memecah di mana-mana
+    // walaupun ada ruang, jadi nama biasa pun terpotong di tengah; overflow-wrap
+    // pecah pada ruang seperti biasa dan hanya paksa pecah dalam perkataan yang
+    // memang tidak muat. (Nama kelas itu sengaja tidak dieja di sini — pengimbas
+    // Tailwind mengutipnya dari komen dan menghantar utiliti mati ke setiap CSS.)
+    kiri.appendChild(el('p', 'break-words text-xs text-stone-500', o.subteks));
+
+    // Amaran diletak pada barisnya sendiri: kalau digabung ke tajuk yang
+    // `truncate`, nama hadiah yang panjang akan memotong amaran itu terus.
+    if (o.amaran) kiri.appendChild(el('p', 'mt-1 text-xs text-amber-700', o.amaran));
+
+    li.appendChild(kiri);
+    const btn = el('button', 'shrink-0 rounded-xl border border-red-200 px-3 py-1.5 text-xs text-red-600', o.butang) as HTMLButtonElement;
+    btn.type = 'button';
+    btn.addEventListener('click', o.onKlik);
+    li.appendChild(btn);
+    return li;
+  }
+
+  // Selalu POST (shim .rpc). RPC urus menolak GET dengan sengaja supaya frasa
+  // laluan tidak pernah muncul dalam URL — jangan sesekali tukar ke GET.
+  async function panggil(fn: string, params: Record<string, unknown>) {
+    return supabase.rpc(fn, params).abortSignal(AbortSignal.timeout(15_000));
+  }
+
+  // Frasa laluan yang sedang digunakan. Modul kandungan dan modul RSVP
+  // memerlukannya pada setiap panggilan, dan ia hanya diketahui selepas
+  // muatDash berjaya.
+  let kunciSemasa = '';
+
+  // Tanda "panel kandungan sudah berisi". Ia mesti dibatalkan pada SETIAP
+  // laluan yang mengosongkan panel itu — bukan hanya log keluar — kerana
+  // reset() meninggalkan panel kosong tanpa mesej dan tanpa muat semula
+  // sendiri. Lihat kunciDitolak() dan hujung muatDash().
+  let kandunganDimuat = false;
+
+  // Tanda "panel RSVP sudah berisi", sama seperti kandunganDimuat. Ia mesti
+  // dibatalkan pada SETIAP laluan yang mengosongkan panel itu, bukan hanya log
+  // keluar — reset() meninggalkan panel kosong tanpa mesej dan tanpa muat
+  // semula sendiri.
+  let rsvpDimuat = false;
+
+  // Tanda "panel doa sudah berisi" — peraturan yang sama seperti rsvpDimuat.
+  let doaDimuat = false;
+
+  // Tab yang sedang dipaparkan. Wujud supaya muat semula yang dicetuskan oleh
+  // satu tindakan pada satu tab (Bebaskan, Padam sumbangan) tidak melontar
+  // tuan rumah ke tab lain — muatDash pulang ke sini, bukan ke tab tetap. Ia
+  // ditetapkan semula kepada TAB_LALAI apabila satu sesi tamat.
+
+  // Tab lalai untuk sesi baharu dan untuk tetapan semula selepas sesi tamat.
+  const TAB_LALAI = 'rsvp';
+  let tabSemasa = TAB_LALAI;
+
+  // kunciDitolak dihantar di sini sebagai rujukan sahaja. Yang menjaga rujukan
+  // `kandungan` (dan `rsvp` di bawah) di dalamnya ialah MASA PANGGILAN, bukan
+  // susunan baris: fungsi itu cuma boleh dilaksanakan dari dalam panggil balik
+  // async, selepas satu RPC pulang — jauh selepas kedua-dua const ini selesai
+  // diumpukkan. Menyusun semula kedua-duanya tidak mengubah apa-apa, dan kalau
+  // ia benar-benar dipanggil sebelum umpukan itu, TDZ const akan melontar
+  // ReferenceError yang lantang, bukan berkelakuan salah secara senyap.
+  const kandungan = pasangKandungan({
+    root: panelKandungan,
+    panggil,
+    kunci: () => kunciSemasa,
+    kunciDitolak,
+  });
+
+  const rsvp = pasangRsvp({
+    root: panelRsvp,
+    panggil,
+    kunci: () => kunciSemasa,
+    kunciDitolak,
+  });
+
+  const doa = pasangDoa({
+    root: panelDoa,
+    panggil,
+    kunci: () => kunciSemasa,
+    kunciDitolak,
+  });
+
+  function pilihTab(nama: string): void {
+    tabSemasa = nama;
+    for (const p of panels) p.classList.toggle('hidden', p.dataset.panel !== nama);
+    for (const b of tabBtns) {
+      const aktif = b.dataset.tab === nama;
+      b.setAttribute('aria-pressed', String(aktif));
+      b.classList.toggle('border-stone-800', aktif);
+      b.classList.toggle('font-medium', aktif);
+      b.classList.toggle('border-stone-300', !aktif);
+      b.classList.toggle('text-stone-600', !aktif);
+    }
+    // Dimuat malas: setiap tab hanya memanggil pelayan bila ia dibuka.
+    if (nama === 'kandungan' && !kandunganDimuat) {
+      kandunganDimuat = true;
+      kandungan.muat();
+    }
+    if (nama === 'rsvp' && !rsvpDimuat) {
+      rsvpDimuat = true;
+      rsvp.muat();
+    }
+    if (nama === 'doa' && !doaDimuat) {
+      doaDimuat = true;
+      doa.muat();
+    }
+  }
+
+  for (const b of tabBtns) {
+    b.addEventListener('click', () => pilihTab(b.dataset.tab ?? TAB_LALAI));
+  }
+
+  /** Kunci ditolak (atau ditukar) — buang cache dan minta semula. */
+  function kunciDitolak(): void {
+    clearKunci();
+    // Buang salinan dalam memori juga, bukan cache localStorage sahaja. Kalau
+    // tidak, kunci() masih memulangkan frasa lama kepada modul kandungan dan
+    // panggilan yang belum selesai boleh terus mengesahkan diri selepas sesi
+    // ini sepatutnya sudah tamat.
+    kunciSemasa = '';
+    // showPrompt() hanya menyembunyikan pembalut papan; ia tidak meruntuhkan
+    // DOM panel kandungan atau RSVP, jadi senarai dan borang sesi lama masih
+    // hidup di bawah skrin frasa laluan. Kosongkan kedua-duanya, dan lupakan
+    // tanda "sudah berisi" supaya kedua-dua panel mengambil data semula
+    // selepas ini.
+    kandungan.reset();
+    kandunganDimuat = false;
+    rsvp.reset();
+    rsvpDimuat = false;
+    doa.reset();
+    doaDimuat = false;
+    // Sesi ini tamat — sesi seterusnya (selepas frasa laluan yang betul)
+    // mesti bermula pada RSVP, bukan mewarisi tab sesi yang baru ditolak ini.
+    tabSemasa = TAB_LALAI;
+    showPrompt(true);
+  }
+
+  /**
+   * Kegagalan BUKAN-kunci: rangkaian putus, 5xx, atau AbortSignal.timeout.
+   * Tulisan tidak pernah dicuba semula (postgrest.ts), jadi UI mesti yang
+   * menawarkan percubaan itu — dan borang dibuka semula supaya halaman tidak
+   * pernah tinggal tanpa satu pun kawalan.
+   */
+  function showFailure(kunci: string): void {
+    // Papan disembunyikan bersama. Kegagalan ini boleh berlaku pada muat semula
+    // SELEPAS papan terbuka (mis. Bebaskan, sahkan, lalu urus_overview yang
+    // menyusul kena had masa 15s pada talian mudah alih) — dan tanpa baris ini
+    // borang frasa laluan yang dipusatkan, sepanduk merah, dan papan penuh yang
+    // rata kiri bertindan pada satu skrin. Itulah keadaan bercampur yang
+    // 259e979 memang cuba hapuskan.
+    dash.classList.add('hidden');
+    loading.classList.add('hidden');
+    cubaLagi.onclick = () => muatDash(kunci);
+    failure.classList.remove('hidden');
+    form.classList.remove('hidden');
+    kunciError.classList.add('hidden');
+    modKunci(true);
+  }
+
+  async function muatDash(kunci: string): Promise<void> {
+    form.classList.add('hidden');
+    failure.classList.add('hidden');
+    loading.classList.remove('hidden');
+    try {
+      const { data, error } = await panggil('urus_overview', { p_kunci: kunci });
+      loading.classList.add('hidden');
+      if (error) {
+        if (error.message.includes('kunci_salah')) {
+          kunciDitolak();
+          return;
+        }
+        showFailure(kunci);
+        return;
+      }
+      const ov = data as Overview;
+      setKunci(kunci);
+      kunciSemasa = kunci;
+
+      jumlahEl.textContent =
+        `${ov.jumlah.tempahan} tempahan · ${ov.jumlah.sumbangan} sumbangan · RM ${wang(ov.jumlah.rm)}`;
+
+      senaraiTempahan.replaceChildren();
+      if (ov.tempahan.length === 0) {
+        senaraiTempahan.appendChild(el('li', 'text-sm text-stone-500', 'Tiada tempahan lagi.'));
+      }
+      for (const t of ov.tempahan) {
+        senaraiTempahan.appendChild(
+          baris({
+            teks: t.hadiah,
+            subteks: `${t.nama} · ${t.telefon} · ${masa(t.pada)}`,
+            amaran: t.hadiah_aktif ? '' : '⚠️ hadiah tidak aktif — tetamu tak boleh batal sendiri',
+            butang: 'Bebaskan',
+            onKlik: async () => {
+              if (!window.confirm(`Bebaskan tempahan "${t.hadiah}" oleh ${t.nama}?`)) return;
+              const { error: e2 } = await panggil('urus_batal_tempahan', { p_kunci: kunci, p_reservation_id: t.id });
+              if (e2) {
+                if (e2.message.includes('kunci_salah')) { kunciDitolak(); return; }
+                window.alert('Gagal. Cuba semula.');
+                return;
+              }
+              muatDash(kunci);
+            },
+          }),
+        );
+      }
+
+      senaraiSumbangan.replaceChildren();
+      if (ov.sumbangan.length === 0) {
+        senaraiSumbangan.appendChild(el('li', 'text-sm text-stone-500', 'Tiada sumbangan lagi.'));
+      }
+      for (const s of ov.sumbangan) {
+        senaraiSumbangan.appendChild(
+          baris({
+            teks: s.tabung,
+            nilai: `RM ${wang(s.amaun)}`,
+            subteks: `${s.nama} · ${s.telefon} · ${masa(s.pada)}`,
+            butang: 'Padam',
+            onKlik: async () => {
+              if (!window.confirm(`Padam sumbangan RM ${wang(s.amaun)} oleh ${s.nama}?`)) return;
+              const { error: e2 } = await panggil('urus_padam_sumbangan', { p_kunci: kunci, p_contribution_id: s.id });
+              if (e2) {
+                if (e2.message.includes('kunci_salah')) { kunciDitolak(); return; }
+                window.alert('Gagal. Cuba semula.');
+                return;
+              }
+              muatDash(kunci);
+            },
+          }),
+        );
+      }
+
+      dash.classList.remove('hidden');
+      modKunci(false);
+      // Papan dipaparkan semula — kedua-dua panel malas (kandungan dan RSVP)
+      // mungkin baru dikosongkan reset(), dan datanya mungkin sudah lapuk.
+      // Lupakan kedua-dua tanda supaya kedua-duanya mengambil data semula.
+      // Tab yang dipaparkan pula kembali ke tab yang tuan rumah sedang buka
+      // sebelum muat semula ini (tabSemasa), lalai kepada RSVP untuk sesi
+      // baharu — supaya satu tindakan pada satu tab (Bebaskan, Padam
+      // sumbangan) tidak pernah melontar tuan rumah ke tab lain. Kedua-dua
+      // tanda ini dikosongkan SEBELUM pilihTab(tabSemasa) dipanggil, bukan
+      // selepas — pilihTab() itulah yang menyemak tanda ini dan mencetuskan
+      // muat semula panel yang aktif, jadi kalau susunan ini ditukar, tuan
+      // rumah akan tertinggal pada panel kosong yang tiada cara untuk memuat
+      // semula dirinya sendiri.
+      kandunganDimuat = false;
+      rsvpDimuat = false;
+      doaDimuat = false;
+      pilihTab(tabSemasa);
+    } catch {
+      showFailure(kunci);
+    }
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const kunci = (form.elements.namedItem('kunci') as HTMLInputElement).value;
+    if (kunci !== '') muatDash(kunci);
+  });
+
+  // Buang frasa laluan yang disimpan — untuk bila papan ini dibuka pada
+  // peranti orang lain. form.reset() supaya kotak input tidak tinggal berisi.
+  logKeluar.addEventListener('click', () => {
+    clearKunci();
+    // Sebab yang sama seperti dalam kunciDitolak(): frasa laluan dalam memori
+    // mesti hilang bersama cache, kerana "log keluar pada peranti orang lain"
+    // tidak bermakna apa-apa kalau nilai itu masih hidup dalam modul ini.
+    kunciSemasa = '';
+    form.reset();
+    // Sesi baharu bermula kosong: buang kandungan sesi lama daripada DOM dan
+    // paksa ia diambil semula, supaya frasa laluan seterusnya tidak mewarisi
+    // apa yang dipaparkan sebelum ini.
+    kandungan.reset();
+    kandunganDimuat = false;
+    rsvp.reset();
+    rsvpDimuat = false;
+    doa.reset();
+    doaDimuat = false;
+    // Sesi baharu bermula pada RSVP, bukan pada tab yang ditinggalkan sesi lama.
+    tabSemasa = TAB_LALAI;
+    showPrompt(false);
+  });
+
+  const cached = getKunci();
+  if (cached !== '') muatDash(cached);
+</script>

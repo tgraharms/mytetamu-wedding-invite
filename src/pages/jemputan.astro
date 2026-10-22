@@ -1,0 +1,2073 @@
+---
+/**
+ * Probe 07 — cinematic invite. Motion probe only.
+ *
+ * A dark envelope waits for one tap, opens, and the cream card that slides out
+ * is the existing invite's identity — so the final dissolve back to `/` is a
+ * continuation rather than a jump cut. Five content scenes cross-dissolve after
+ * the opening.
+ *
+ * Every visual layer is a placeholder from `premium-assets.ts` until real art
+ * lands. The point of this page is to answer "does the pacing work and does it
+ * hold frame rate on a real phone" BEFORE anyone spends hours in Canva.
+ *
+ * The one tap on the seal is load-bearing for three separate reasons: it is the
+ * user gesture iOS requires before audio may play, it creates the ceremony of
+ * choosing to open an invitation, and it removes any chance the sequence plays
+ * while the guest is not looking at the screen.
+ */
+import InviteLayout from '../layouts/InviteLayout.astro';
+import { site } from '../content/site';
+import { premiumAssets } from '../content/premium-assets';
+import { AUDIO_SRC } from '../lib/portfolioContent';
+
+/** Path for a layer, or null while it is still a placeholder. */
+const art = (key: string) => premiumAssets.find((a) => a.key === key)?.src ?? null;
+/** WebP alongside an AVIF, for Safari older than 16.4. */
+const artFallback = (key: string) =>
+  premiumAssets.find((a) => a.key === key)?.srcFallback ?? null;
+
+/* The stage's inline style declares ONLY --px-hero, because that is the only
+   custom property this stylesheet ever reads via var() (the paper texture
+   under the gradient, see the two `var(--px-hero, none)` reads below). A
+   blanket assetVars() dump (every asset with a src, whether consumed or not)
+   is harmless in the browser — an unconsumed custom property never triggers
+   a fetch — but scripts/budget.mjs's static style="" scan cannot tell an
+   unused declaration from a real one, so it was counting all 14 image URLs
+   as critical regardless of each <img>'s loading attribute. Scoping this to
+   the one property actually used lets the lazy scenes' images be measured
+   only through the <picture>/<img> markup, where loading="lazy" is honoured.
+
+   The value points at the 960w candidate, not the 1440w original. The two
+   `var(--px-hero, none)` reads below are untouched — same rule, same
+   fallback — only WHICH file the property resolves to changes. This is what
+   lets the texture and the env-hero/film-bed <picture> elements resolve to
+   the identical URL on a DPR-2 phone, so the browser fetches and decodes the
+   paper once instead of twice. A DPR-3 phone pays one extra small fetch for
+   this texture (the picture elements there pick the 1440w candidate) — an
+   acceptable trade since DPR-3 phones are not the memory-constrained ones
+   this task is about. */
+const heroTexture = art('--px-hero-960') ?? art('--px-hero');
+const stageVars = heroTexture ? `--px-hero:url('${heroTexture}')` : '';
+
+/* Same idiom as heroTexture above: fall back to the 1440w candidate if the
+   960w one is ever nulled, so the srcset below can never interpolate to
+   "null" and 404. Both env-hero/film-bed <picture> blocks reuse heroTexture
+   itself for their 960w candidate — see the comment above — so this is only
+   needed for the separate cover-top layer. */
+const coverTop960 = art('--px-cover-top-960') ?? art('--px-cover-top');
+
+const [y, m, d] = site.event.dateISO.split('-');
+const dotDate = `${d}.${m}.${y}`;
+
+/* Scene rhythm lives in the <script> block at the bottom, not here — an Astro
+   <script> is a separate module bundle and cannot read frontmatter, so the copy
+   that used to sit here was never the one running. It has been removed rather
+   than kept in sync: it described fixed-length scenes, which is no longer how
+   this works. HOLD and XFADE down there are the two numbers to tune. */
+
+/* Storyboard: envelope → names → prayers → info → cta.
+   Date and venue merged into one INFO scene, per the storyboard. */
+const scenes = [
+  { id: 'nama', kind: 'names' },
+  { id: 'doa', kind: 'prayers' },
+  { id: 'info', kind: 'info' },
+  { id: 'penutup', kind: 'cta' },
+] as const;
+
+/** Decoration per scene kind: [manifest key, css classes]. */
+const FRAME = [
+  ['--px-filigree-left', 'fil fil-l'],
+  ['--px-filigree-right', 'fil fil-r'],
+  ['--px-bouquet-left', 'bq bq-l'],
+  ['--px-bouquet-right', 'bq bq-r'],
+] as const;
+
+const DECO: Record<string, readonly (readonly [string, string])[]> = {
+  // CTA reuses the names frame verbatim, per the storyboard.
+  names: FRAME,
+  cta: FRAME,
+  prayers: [
+    ['--px-tl-b', 'pf pf-tlb'],
+    ['--px-br-a', 'pf pf-bra'],
+    ['--px-br-b', 'pf pf-brb'],
+  ],
+  info: [
+    ['--px-corner-tl', 'ic ic-tl'],
+    ['--px-corner-br', 'ic ic-br'],
+    ['--px-mf-a', 'ic ic-mf'],
+    ['--px-bl-a', 'ic ic-bl'],
+  ],
+};
+
+/* Decoration that paints BEHIND the hexagon, giving the prayers scene three
+   depths: stems behind the panel, panel, big bloom in front. Painting order is
+   DOM order, so a "back" layer has to be a separate group rendered before the
+   panel — z-index alone would not survive the panel's own stacking. */
+const DECO_BACK: Record<string, readonly (readonly [string, string])[]> = {
+  prayers: [['--px-tl-a', 'pf pf-tla']],
+};
+---
+
+<InviteLayout
+  title="Walimatul Urus — Zulhairul & Shahidatul"
+  description="Dengan penuh kesyukuran, kami menjemput anda ke majlis perkahwinan kami di Temerloh, Pahang."
+>
+  <!-- Supplied art exposed as custom properties, so CSS can reuse a layer that
+       is already loaded (the paper) without a second request. -->
+  <div class="px-stage" id="stage" style={stageVars}>
+    <!-- ══ envelope — split reveal ═════════════════════════════════
+         Three layers. The hero sits at the back; two covers lie over it and
+         part vertically on tap. Both covers are supplied as plain rectangles
+         — the V and Λ silhouettes are cut in CSS with clip-path, so the
+         geometry can be retuned without re-exporting anything. -->
+    <div class="px-env" id="env">
+      <div class="env-hero" id="hero">
+        {
+          art('--px-hero') ? (
+            <picture>
+              <source
+                srcset={`${heroTexture} 960w, ${art('--px-hero')} 1440w`}
+                sizes="min(100vw, 480px)"
+                type="image/avif"
+              />
+              <img
+                src={artFallback('--px-hero') ?? art('--px-hero')!}
+                alt=""
+                fetchpriority="high"
+              />
+            </picture>
+          ) : (
+            <span class="ph-damask" />
+          )
+        }
+      </div>
+
+      <!-- Each cover is a wrapper carrying the FILTER, around a child carrying
+           the CLIP-PATH. They cannot live on one element: clip-path is applied
+           after filter and clips the shadow away with everything else outside
+           the silhouette, so a drop-shadow on the clipped element renders
+           nothing at all. Nested, the wrapper shadows the already-cut shape. -->
+      <div class="env-cover env-bot" id="cover-bot">
+        <div class="cover-shape">
+          {art('--px-cover-bottom') && <img src={art('--px-cover-bottom')!} alt="" />}
+        </div>
+      </div>
+
+      <div class="env-cover env-top" id="cover-top">
+        <div class="cover-shape">
+          {
+            art('--px-cover-top') ? (
+              <picture>
+                {artFallback('--px-cover-top') && (
+                  <source
+                    srcset={`${coverTop960} 960w, ${art('--px-cover-top')} 1440w`}
+                    sizes="min(100vw, 480px)"
+                    type="image/avif"
+                  />
+                )}
+                <img
+                  src={artFallback('--px-cover-top') ?? art('--px-cover-top')!}
+                  alt=""
+                  fetchpriority="high"
+                />
+              </picture>
+            ) : (
+              <span class="ph-damask" />
+            )
+          }
+        </div>
+      </div>
+
+      <button class="env-seal" id="seal" type="button" aria-label="Buka jemputan">
+        {
+          art('--px-seal') ? (
+            <img src={art('--px-seal')!} alt="" />
+          ) : (
+            <span class="seal-mono">ZS</span>
+          )
+        }
+      </button>
+
+      <p class="env-hint" id="hint">Sentuh untuk buka</p>
+    </div>
+
+    <!-- ══ scenes ══════════════════════════════════════════════════ -->
+    <div class="px-film" id="film" aria-hidden="true">
+      <!-- Persistent paper, deliberately OUTSIDE the scenes. A backdrop carried
+           from one scene to the next must not re-fade: cross-dissolving it
+           against itself makes it visibly blink, and it is the one surface the
+           guest never stops looking at. The prayers scene covers it with its own
+           brown tone rather than replacing it. -->
+      <div class="film-bed" id="film-bed">
+        {
+          art('--px-hero') ? (
+            <picture>
+              <source
+                srcset={`${heroTexture} 960w, ${art('--px-hero')} 1440w`}
+                sizes="min(100vw, 480px)"
+                type="image/avif"
+              />
+              <img src={artFallback('--px-hero') ?? art('--px-hero')!} alt="" />
+            </picture>
+          ) : (
+            <span class="ph-damask" />
+          )
+        }
+      </div>
+
+      {
+        scenes.map((s, i) => (
+          <section class={`px-scene sc-${s.kind}`} data-scene={i} id={`px-${s.id}`}>
+            {s.kind === 'prayers' && (
+              <>
+                <div class="sc-tone" />
+                {/* Behind the panel. Only what rises above the panel's top edge
+                    is seen, which is what puts these stems in the background. */}
+                <div class="sc-flora sc-flora-back">
+                  {(DECO_BACK[s.kind] ?? []).map(([key, cls]) =>
+                    art(key) ? (
+                      <span class={`deco ${cls}`}>
+                        <picture>
+                          <source srcset={art(key)!} type="image/avif" />
+                          <img
+                            src={artFallback(key) ?? art(key)!}
+                            alt=""
+                            fetchpriority="low"
+                            loading={i > 0 ? 'lazy' : undefined}
+                          />
+                        </picture>
+                      </span>
+                    ) : null,
+                  )}
+                </div>
+                {/* The hero shape. Grows from the middle outward, which is the
+                    transition into this scene rather than a plain dissolve. */}
+                <div class="hex-panel" data-hex />
+              </>
+            )}
+
+            {/* Decoration sits in front of the bed, behind the type.
+                fetchpriority low — none of it is needed until the envelope has
+                opened, and it must never delay the covers. */}
+            <div class="sc-flora">
+              {(DECO[s.kind] ?? []).map(([key, cls]) =>
+                art(key) ? (
+                  <span class={`deco ${cls}`}>
+                    <picture>
+                      <source srcset={art(key)!} type="image/avif" />
+                      <img
+                        src={artFallback(key) ?? art(key)!}
+                        alt=""
+                        fetchpriority="low"
+                        loading={i > 0 ? 'lazy' : undefined}
+                      />
+                    </picture>
+                  </span>
+                ) : null,
+              )}
+            </div>
+
+            <div class="sc-type">
+              <div class="sc-inner">
+                {s.kind === 'names' && (
+                  <>
+                    <div class="mask"><span class="line eyebrow">Walimatul Urus</span></div>
+                    <div class="mask mask-name"><span class="line display name" data-write data-sweep>{site.couple.nama1}</span></div>
+                    <div class="amp"><span>&amp;</span></div>
+                    <div class="mask mask-name"><span class="line display name" data-write data-sweep>{site.couple.nama2}</span></div>
+                    <div class="rule"><span data-rule /></div>
+                    <div class="mask"><span class="line tiny">{site.event.dayName} · {dotDate}</span></div>
+                  </>
+                )}
+
+                {s.kind === 'prayers' && (
+                  <>
+                    <div class="mask"><span class="line arab">بِسْمِ ٱللَّٰهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</span></div>
+                    <div class="mask"><span class="line tiny">Assalamualaikum &amp; Selamat Sejahtera</span></div>
+                    <div class="mask"><span class="line body sm">Dengan penuh kesyukuran, kami ingin menjemput ke majlis perkahwinan puteri kami yang dikasihi,</span></div>
+                    <div class="mask mask-name"><span class="line name nm-sm" data-write>{site.couple.nama2}</span></div>
+                    <div class="amp"><span>&amp;</span></div>
+                    <div class="mask mask-name"><span class="line name nm-sm" data-write>{site.couple.nama1}</span></div>
+                  </>
+                )}
+
+                {s.kind === 'info' && (
+                  <>
+                    <div class="mask"><span class="line eyebrow">Tarikh &amp; Masa</span></div>
+                    <div class="mask"><span class="line big">{site.event.dayName}</span></div>
+                    <div class="mask"><span class="line date">{dotDate}</span></div>
+                    <div class="mask"><span class="line tiny">{site.event.displayTime}</span></div>
+                    <div class="rule"><span data-rule /></div>
+                    <div class="mask"><span class="line eyebrow">Lokasi Majlis</span></div>
+                    <div class="mask mask-name"><span class="line name nm-sm" data-write>{site.venue.name}</span></div>
+                    <div class="mask"><span class="line body sm">{site.venue.address}</span></div>
+                  </>
+                )}
+
+                {s.kind === 'cta' && (
+                  <>
+                    <div class="mask"><span class="line tiny">{site.venue.name} · {site.venue.town}</span></div>
+                    <div class="mask"><span class="line tiny">{site.event.dayName} · {dotDate}</span></div>
+                    <div class="rule"><span data-rule /></div>
+                    <div class="mask"><span class="line body">Semoga kehadiran anda</span></div>
+                    <div class="mask"><span class="line body">menyempurnakan majlis kami.</span></div>
+                    {/* Wrapper carries GSAP's entrance; the anchor inside carries
+                        the looping pulse. One element cannot do both — GSAP owns
+                        transform and would overwrite the animation. */}
+                    <span class="cta-wrap">
+                      {/* The arrow is its own element so it can lean without
+                          dragging the label with it, and aria-hidden so the
+                          accessible name stays "Jemputan penuh". */}
+                      <a class="cta" href="/" id="cta">
+                        Jemputan penuh <span class="cta-arrow" aria-hidden="true">→</span>
+                      </a>
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+        ))
+      }
+    </div>
+
+    <!-- ══ atmosphere ══════════════════════════════════════════════ -->
+    <div class="px-vig"></div>
+    <div class="px-grain" id="grain"></div>
+
+    <!-- ══ chrome ══════════════════════════════════════════════════ -->
+    <div class="px-chrome" id="chrome">
+      <div class="ticks">
+        {scenes.map((_, i) => <span class="tick" data-tick={i}><i /></span>)}
+      </div>
+      <div class="ctrls">
+        <button id="mute" type="button" class="cbtn" aria-pressed="false" aria-label="Muzik">♪</button>
+        <button id="replay" type="button" class="cbtn" aria-label="Main semula">↻</button>
+        <a href="/" class="cbtn cbtn-skip">Terus ke jemputan</a>
+      </div>
+    </div>
+
+    <p class="px-rm px-note-rm">
+      Gerakan dikurangkan — lihat <a href="/">jemputan penuh</a>.
+    </p>
+
+    <audio id="px-audio" src={AUDIO_SRC} loop preload="none"></audio>
+  </div>
+
+</InviteLayout>
+
+<style is:global>
+  /* ══ stage ══════════════════════════════════════════════════════ */
+  .px-stage {
+    position: relative;
+    width: 100%;
+    height: 100svh;
+    overflow: hidden;
+    background: #f7f3ec;
+    /* No perspective or preserve-3d: the split reveal is two translateY tweens
+       and a scale, all 2D. Dropping the 3D context means the compositor never
+       has to build a 3D rendering context for the stage, which is the cheapest
+       part of this rebuild. */
+    isolation: isolate;
+    touch-action: manipulation;
+  }
+
+  /* ══ envelope ═══════════════════════════════════════════════════ */
+  .px-env {
+    position: absolute;
+    inset: 0;
+  }
+  .px-env img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Revealed behind the covers. Full frame, so it is the one layer whose
+     top and bottom get cropped on shorter phones. */
+  /* Deliberately the same cream as .tone-cream, so the cross-dissolve from the
+     opened envelope into the first scene has nothing to give away. */
+  .env-hero {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: #f7f3ec;
+  }
+
+  /* ── the two covers ──────────────────────────────────────────────
+     Supplied as plain 3:4 rectangles; the silhouettes are cut here.
+     background-position anchors each one to the seam edge, so the seam
+     is pinned identically on every phone and the aspect-ratio variance
+     is spent on the far edge, which is heading off screen anyway. */
+  /* Wrapper: position + travel + shadow. No clip-path here, deliberately. */
+  .env-cover {
+    position: absolute;
+    left: 0;
+    right: 0;
+    will-change: transform;
+  }
+  /* Child: the silhouette. Nothing but clip-path and the artwork. */
+  .cover-shape {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+  /* object-position is the <img> equivalent of background-position: it decides
+     which part of the 3:4 source survives when the box is a different shape. */
+  .env-cover img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Geometry taken from the draft: shoulders meet the side edges at 36% of the
+     frame, apex at 63%. Expressed as a share of this box (63% tall), the
+     shoulders land at 57% of its own height.
+     The five points around the tip round it off — sampled from a quadratic
+     curve between the tangent points, with x and y offsets computed separately
+     because the box is not square and equal percentages would give an ellipse
+     rather than a round corner. */
+  .env-top {
+    /* The one number that sets how sharp the V is: where the diagonals meet
+       the side edges, as a share of this box's height. Higher = shallower and
+       wider. 57% was the original steep point; 85.7% is the gentle chevron.
+       The apex stays at the bottom of the box either way, so the seal does not
+       move when this changes. */
+    --v-shoulder: 85.7%;
+    top: 0;
+    height: 63%;
+  }
+  .env-top .cover-shape {
+    background: #fbf7f0;
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% var(--v-shoulder),
+      53.9% 98.9%,
+      51.95% 99.31%,
+      50% 99.44%,
+      48.05% 99.31%,
+      46.1% 98.9%,
+      0 var(--v-shoulder)
+    );
+  }
+  .env-top {
+    /* Three passes, and the order is the point.
+       1px hard, no blur — the cut edge. drop-shadow follows the clipped
+       silhouette, so this traces the V exactly and is the "outline" that
+       separates the sheet from what is under it. Without it the chevron has a
+       shadow but no edge, and reads as a soft shape rather than cut card.
+       Then the tight contact shadow (these two pieces are touching), then a
+       wide ambient one. The wide pass alone reads as floating.
+       Filters rasterise once and the covers are promoted layers, so animating
+       them re-composites rather than re-running these. */
+    filter: drop-shadow(0 1px 0 rgba(138, 108, 56, 0.62))
+      drop-shadow(0 4px 5px rgba(84, 62, 28, 0.34))
+      drop-shadow(0 13px 26px rgba(84, 62, 28, 0.2));
+  }
+  .env-top img,
+  .env-top picture {
+    object-position: bottom center;
+  }
+  /* Plain, and starts higher than the floral's shoulders so its straight top
+     edge stays hidden behind the V until it travels. */
+  /* Same paper stock as the card — the hero image reused, so it costs nothing
+     extra — but sat under a warm wash, for two reasons. It reads a shade deeper
+     than the sheet behind it, and the wash is heavy enough that the letter's
+     handwriting stays subliminal: grain and creases survive, words do not. At
+     lower opacity the cover and the card became the same written sheet as the
+     covers parted, which collapsed the stack and made no physical sense — an
+     envelope does not have the letter printed on its outside.
+     If AVIF is unsupported the texture simply drops and the gradient remains. */
+  .env-bot {
+    /* Λ mirroring the flap's chevron, at the same 21° so the two read as a
+       matched pair. Its apex sits at 45% and shoulders at 54% — both above the
+       flap's own edge at every x, which is what keeps it completely hidden
+       until it travels. Same rounded-tip construction as .env-top. */
+    --lambda-shoulder: 34.3%;
+    bottom: 0;
+    height: 70%;
+    /* Shadows point UP because this sheet's cut edge faces up. */
+    filter: drop-shadow(0 -1px 0 rgba(138, 108, 56, 0.58))
+      drop-shadow(0 -4px 5px rgba(84, 62, 28, 0.3))
+      drop-shadow(0 -13px 26px rgba(84, 62, 28, 0.18));
+  }
+  .env-bot .cover-shape {
+    background-image:
+      linear-gradient(180deg, rgba(233, 221, 194, 0.79) 0%, rgba(221, 206, 174, 0.86) 100%),
+      var(--px-hero, none);
+    background-size: cover, cover;
+    background-position: center, top center;
+    clip-path: polygon(
+      0 100%,
+      100% 100%,
+      100% var(--lambda-shoulder),
+      53.89% 22.4%,
+      51.94% 22.03%,
+      50% 21.9%,
+      48.06% 22.03%,
+      46.11% 22.4%,
+      0 var(--lambda-shoulder)
+    );
+  }
+  .env-bot img {
+    object-position: top center;
+  }
+
+  .env-seal {
+    position: absolute;
+    /* Centred ON the rounded apex of the V, not below it. The rounding pulls
+       the visual tip up to ~97.7% of the cover's 63% height, so 62% of the
+       stage puts the seal's centre exactly on the point. */
+    top: 62%;
+    left: 50%;
+    width: 82px;
+    height: 82px;
+    margin: -41px 0 0 -41px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 32%, #fdfaf3, #e8dcc4);
+    box-shadow:
+      0 4px 14px rgba(96, 74, 38, 0.4),
+      inset 0 -2px 5px rgba(120, 92, 44, 0.28);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    z-index: 8;
+  }
+  .seal-mono {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 36px;
+    letter-spacing: 0.04em;
+    color: #6b4423;
+  }
+  .env-seal img {
+    position: static;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .env-hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 12%;
+    text-align: center;
+    /* Was 11px uppercase sans, which read as a system label rather than part of
+       the invitation. Italic Cormorant at 21px matches the card's own voice. */
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 21px;
+    letter-spacing: 0.05em;
+    /* Was cream, for the dark envelope. On the cream draft it was invisible —
+       and this is the only instruction the guest gets. */
+    color: rgba(104, 84, 48, 0.86);
+    z-index: 8;
+  }
+
+  /* ══ scenes ═════════════════════════════════════════════════════ */
+  .px-film {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+  }
+  .px-scene {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    visibility: hidden;
+    overflow: hidden;
+    will-change: opacity, transform;
+  }
+  /* Persistent paper under every scene. Overscanned so its slow pan never
+     exposes an edge. */
+  .film-bed {
+    position: absolute;
+    inset: -6%;
+    overflow: hidden;
+  }
+  .film-bed img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* ── reduced motion: stacked, scrollable, no animation ────────────
+     The scenes are absolutely positioned and layered for a timed
+     cross-dissolve; none of that applies once reduced motion means
+     nothing plays. Stack them in document order instead so the whole
+     invitation stays reachable by scrolling. */
+  #film.px-static {
+    position: relative;
+    height: auto;
+  }
+  #film.px-static .px-scene {
+    position: relative;
+    inset: auto;
+    min-height: 100svh;
+  }
+  /* Stays behind the stacked scenes while the page scrolls, rather than
+     scrolling away with the first one. */
+  #film.px-static .film-bed {
+    position: fixed;
+  }
+  /* The stage is a fixed 100svh, overflow:hidden box built to frame a timed
+     animation. That box would just clip everything past the first scene
+     here, so let it grow to fit the stacked content and allow scrolling. */
+  .px-stage:has(.px-static) {
+    height: auto;
+    overflow: visible;
+  }
+
+  /* Prayers only: the brown ground, laid over the persistent paper rather than
+     replacing it, so the paper is still there when the scene ends. */
+  .sc-tone {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(125% 95% at 50% 34%, #7a4d22 0%, #63391a 62%, #4c2a12 100%);
+  }
+
+  /* The hero shape from ReferenceB: an elongated hexagon in cream, with the
+     hairline inset rule drawn as a second border rather than a second element. */
+  .hex-panel {
+    position: absolute;
+    inset: 13% 8%;
+    background: #fdf6e4;
+    clip-path: polygon(50% 0, 100% 6.5%, 100% 93.5%, 50% 100%, 0 93.5%, 0 6.5%);
+    transform-origin: 50% 50%;
+  }
+  /* The inset hairline is two stacked clipped fills, not a border. A border on a
+     clipped element only survives where the clip runs parallel to it, so on a
+     hexagon you get the two vertical sides and nothing across the diagonals.
+     ::before lays the rule colour, ::after covers all but 1px of it. */
+  .hex-panel::before,
+  .hex-panel::after {
+    content: '';
+    position: absolute;
+    clip-path: polygon(50% 0, 100% 6.5%, 100% 93.5%, 50% 100%, 0 93.5%, 0 6.5%);
+  }
+  .hex-panel::before {
+    inset: 11px;
+    background: rgba(122, 77, 34, 0.5);
+  }
+  /* Not a flat fill: a soft centre-light plus the paper grain the rest of the
+     film already uses, so the panel reads as stock rather than a shape. The
+     texture is the hero image, already loaded — no extra request. */
+  .hex-panel::after {
+    inset: 12px;
+    background-color: #fdf6e4;
+    background-image:
+      radial-gradient(
+        72% 48% at 50% 42%,
+        rgba(255, 253, 246, 0.95) 0%,
+        rgba(253, 246, 228, 0.45) 55%,
+        rgba(236, 223, 196, 0.5) 100%
+      ),
+      var(--px-hero, none);
+    background-size: cover, cover;
+    background-position: center, center;
+    background-blend-mode: normal, luminosity;
+  }
+  /* Placeholder damask. Deliberately visible as a placeholder — real art will
+     be far lower contrast than this. */
+  .ph-damask {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 25% 25%, rgba(180, 154, 106, 0.16) 2.5px, transparent 3.5px),
+      radial-gradient(circle at 75% 75%, rgba(180, 154, 106, 0.16) 2.5px, transparent 3.5px);
+    background-size: 26px 26px;
+  }
+
+  .sc-flora {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  /* <picture> is an inline wrapper with no box of its own, so it must not carry
+     layout — styling it would silently do nothing. */
+  .sc-flora picture {
+    display: contents;
+  }
+  /* Every decoration is a positioned SPAN wrapping the image. GSAP animates the
+     span (fade + zoom); the image inside is free to carry its own breathing
+     animation without the two fighting over `transform`. */
+  .deco {
+    position: absolute;
+    display: block;
+  }
+  .deco img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* — names / cta frame — flush to the corners. Both sets are composed with the
+     subject hard against the corner, so bleeding them off-frame crops the art. */
+  .fil {
+    top: 3%;
+    width: 30%;
+  }
+  .fil-l {
+    left: 4%;
+  }
+  .fil-r {
+    right: 4%;
+  }
+  .bq {
+    bottom: 0;
+    width: 54%;
+  }
+  .bq-l {
+    left: 0;
+  }
+  .bq-r {
+    right: 0;
+  }
+
+  /* — prayers — two at top-left, two at bottom-right, overlapping the hexagon's
+     corners exactly as they do in ReferenceB. */
+  .pf-tla {
+    top: -2%;
+    left: 8%;
+    width: 44%;
+  }
+  .pf-tlb {
+    top: 9%;
+    left: -14%;
+    width: 46%;
+  }
+  .pf-bra {
+    right: -10%;
+    bottom: 6%;
+    width: 50%;
+  }
+  .pf-brb {
+    right: 6%;
+    bottom: -3%;
+    width: 62%;
+  }
+
+  /* — info — gold line corners on the diagonal, watercolour on the opposite one. */
+  .ic-tl {
+    top: 0;
+    left: 0;
+    width: 38%;
+  }
+  .ic-br {
+    right: 0;
+    bottom: 0;
+    width: 38%;
+  }
+  .ic-mf {
+    right: -8%;
+    top: 22%;
+    width: 40%;
+  }
+  .ic-bl {
+    left: -6%;
+    bottom: 0;
+    width: 52%;
+  }
+
+  /* ── ambient ──────────────────────────────────────────────────────
+     Drifting ornament, in every scene — this used to be scoped to
+     .sc-prayers, so three of the four panels sat completely still.
+     Two things separate ambient from a pulse. First, scale ALONE is a
+     heartbeat: adding a little translation and a fraction of a degree of
+     rotation turns "big, small, big, small" into air moving through the
+     frame. Second, a set of ornaments swelling on the same beat reads as
+     one mechanism, so half of them run the counter-phase cycle and no two
+     share a period — they drift permanently out of step instead of
+     re-converging on a common multiple.
+     Transform only, so all of this is composited and never touches layout.
+     It lives on the inner image so GSAP keeps sole ownership of the
+     wrapper, which it fades and scales on entry. */
+  @keyframes px-breathe {
+    0%,
+    100% {
+      transform: scale(1.02) translate(0, 0) rotate(0deg);
+    }
+    50% {
+      transform: scale(1.095) translate(0.8%, -1.2%) rotate(0.5deg);
+    }
+  }
+  @keyframes px-breathe-alt {
+    0%,
+    100% {
+      transform: scale(1.085) translate(0, 0) rotate(0.4deg);
+    }
+    50% {
+      transform: scale(1.02) translate(-0.9%, 1%) rotate(-0.3deg);
+    }
+  }
+  .px-scene .deco img {
+    animation: px-breathe 7.2s ease-in-out infinite;
+    transform-origin: 50% 50%;
+  }
+  .sc-flora .deco:nth-child(2n) img {
+    animation-name: px-breathe-alt;
+  }
+  /* The negative delays are the important half: without them every ornament
+     in a scene begins at rest the moment the scene does, which is the one
+     frame where the whole set is unmistakably in sync. Starting each mid-cycle
+     means the frame is already alive when it fades up.
+     Scale never returns below 1.02, so the drift and rotation can never pull
+     a corner ornament off the edge it is anchored to. */
+  .sc-flora .deco:nth-child(1) img {
+    animation-duration: 7.2s;
+    animation-delay: -2.4s;
+  }
+  .sc-flora .deco:nth-child(2) img {
+    animation-duration: 8.6s;
+    animation-delay: -5.1s;
+  }
+  .sc-flora .deco:nth-child(3) img {
+    animation-duration: 6.4s;
+    animation-delay: -1.2s;
+  }
+  .sc-flora .deco:nth-child(4) img {
+    animation-duration: 9.3s;
+    animation-delay: -6.7s;
+  }
+  /* The names and closing panels share one frame, and it holds still.
+     Their four pieces are a symmetric matched pair composed hard against the
+     corners (see .fil / .bq above). Drifting a symmetric frame is the one place
+     this effect turns against itself: left and right run on different periods,
+     so they fall out of step with each other and the frame reads as
+     misregistered rather than alive. The prayers and info panels are
+     asymmetric scatters, which is exactly why drift suits them.
+     Specificity is deliberate — .px-scene.sc-names is (0,4,1) and has to
+     outrank the (0,3,1) nth-child rules below, or this silently loses. */
+  .px-scene.sc-names .sc-flora .deco img,
+  .px-scene.sc-cta .sc-flora .deco img {
+    animation: none;
+  }
+
+  /* The stems behind the prayers panel. This has to match the nth-child rules
+     above on specificity AND come after them, because the back container
+     carries both .sc-flora and .sc-flora-back — so its single child is also
+     .sc-flora .deco:nth-child(1), and a plain .sc-flora-back .deco img loses.
+     It did lose: these stems ran the identical 7.2s/-2.4s cycle as the bloom
+     immediately in front of them, the two moving as one piece. Countering it
+     instead is what gives the panel its depth — the layer behind drifts
+     against the layer in front. */
+  .sc-flora-back .deco:nth-child(1) img {
+    animation-name: px-breathe-alt;
+    animation-duration: 10.1s;
+    animation-delay: -3.6s;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* !important is load-bearing, not laziness. The per-ornament rules above
+       are (0,3,1) selectors and this one is (0,2,1), so a plain `animation:
+       none` here loses to `.sc-flora .deco:nth-child(2n) img` and every second
+       ornament keeps drifting for exactly the people who asked it not to. */
+    .px-scene .deco img {
+      animation: none !important;
+    }
+  }
+  .ph-fl {
+    aspect-ratio: 1;
+  }
+  /* Placeholder bouquet: two blobs reading as bloom + leaf. */
+  .ph-fl::before,
+  .ph-fl::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+  }
+  .ph-fl::before {
+    inset: 24% 30% 18% 12%;
+    background: radial-gradient(circle at 34% 32%, #932d3d, #571620);
+  }
+  .ph-fl::after {
+    inset: 8% 12% 46% 48%;
+    background: radial-gradient(circle at 40% 40%, #34693f, #1f4228);
+  }
+
+
+  .sc-type {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 0 32px;
+  }
+  /* The aged paper carries legible handwriting, which fights the names for
+     attention. A soft bed of the paper's own cream under the type settles it
+     without flattening the texture at the edges of the frame. */
+  .sc-names .sc-type::before,
+  .sc-info .sc-type::before,
+  .sc-cta .sc-type::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      70% 40% at 50% 50%,
+      rgba(250, 246, 237, 0.9) 0%,
+      rgba(250, 246, 237, 0.62) 46%,
+      transparent 78%
+    );
+  }
+  .sc-inner {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+  }
+
+  /* ══ type ═══════════════════════════════════════════════════════ */
+  .mask {
+    display: block;
+    overflow: hidden;
+    padding: 0.08em 0;
+  }
+  .line {
+    display: block;
+    will-change: transform;
+  }
+  .line {
+    color: var(--dc-muted);
+  }
+  /* Inside the prayers hexagon the ground is cream too, so the ink stays warm
+     rather than switching for the brown surround behind the panel. */
+  .sc-prayers .line {
+    color: #6b5330;
+  }
+  /* The venue and the prayers names use the script face at a size that fits
+     inside a panel rather than filling the frame. */
+  .nm-sm {
+    font-size: clamp(30px, 9.4vw, 40px) !important;
+    line-height: 1.24;
+  }
+
+  /* ── prayers panel: keep the type inside the hexagon ──────────────
+     The panel spans 8%–92% of the stage, and its sides slope inward toward the
+     top and bottom points. The shared 400px column was wider than that, so
+     lines ran past the cream and sat on the brown. Constrain to the panel's
+     narrowest usable width, not its widest. */
+  .sc-prayers .sc-type {
+    padding: 0 22%;
+  }
+  .sc-prayers .sc-inner {
+    max-width: 264px;
+  }
+  /* Breathing room between the three opening blocks, and a smaller script for
+     the names so the block stops crowding the panel's lower point. */
+  .sc-prayers .arab {
+    margin-bottom: 0.5em;
+  }
+  .sc-prayers .tiny {
+    margin-bottom: 1.1em;
+  }
+  .sc-prayers .body.sm {
+    line-height: 1.85;
+    margin-bottom: 0.5em;
+  }
+  .sc-prayers .nm-sm {
+    font-size: clamp(26px, 7.8vw, 33px) !important;
+  }
+  .sc-prayers .amp {
+    margin: 1px 0;
+  }
+
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--dc-label) !important;
+  }
+  .tiny {
+    font-size: 12.5px;
+    letter-spacing: 0.12em;
+  }
+  .body {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px;
+    line-height: 1.5;
+  }
+  .body.sm {
+    font-size: 15px;
+    font-family: 'Mulish', sans-serif;
+    line-height: 1.7;
+  }
+  .display {
+    position: relative;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(32px, 10.5vw, 44px);
+    line-height: 1.14;
+    color: var(--dc-ink-strong) !important;
+  }
+  /* The couple's names only — the venue keeps the serif, because a script face
+     at address length stops being legible. Gold rather than ink so they read as
+     the subject of the frame and tie to the filigree, one shade deeper than the
+     ornament so the names lead and the corners support. */
+  .name {
+    font-family: 'Great Vibes', 'Cormorant Garamond', cursive;
+    font-size: clamp(38px, 12.6vw, 54px);
+    line-height: 1.3;
+    color: #8a6a2c !important;
+  }
+  /* Great Vibes has deep descenders and tall swashes. The reveal masks clip
+     vertically, so without extra room the tails of the letters get sliced. */
+  .mask-name {
+    padding: 0.22em 0;
+  }
+
+  .big {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(34px, 11vw, 46px);
+    line-height: 1.1;
+    color: var(--dc-ink-strong) !important;
+  }
+  .date {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(26px, 8vw, 34px);
+    color: var(--dc-ink-strong) !important;
+  }
+  .arab {
+    font-family: 'Amiri Quran', 'Cormorant Garamond', serif;
+    font-size: clamp(21px, 6.6vw, 27px);
+    line-height: 2.1;
+    color: #6b4423 !important;
+  }
+  .parents {
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    line-height: 1.6;
+    color: #4a3419 !important;
+  }
+  /* Unmissable while site.ts still holds a TODO for the parents' names. */
+  .todo {
+    border: 1px dashed #b0563f;
+    color: #a8452c !important;
+    padding: 5px 7px;
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    border-radius: 4px;
+  }
+  .amp {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 21px;
+    color: var(--dc-gold);
+    margin: 3px 0;
+    opacity: 0;
+  }
+  .rule {
+    height: 1px;
+    width: 180px;
+    max-width: 60%;
+    margin: 15px auto;
+    overflow: hidden;
+  }
+  .rule span {
+    display: block;
+    height: 1px;
+    width: 100%;
+    transform-origin: 50% 50%;
+    background: linear-gradient(90deg, transparent, var(--dc-gold), transparent);
+  }
+
+  /* ── veil ──────────────────────────────────────────────────────────
+     Wrapped copy cannot rise out of its mask — the mask is as tall as the whole
+     paragraph — so it used to fade in, which is the timidest thing on the page
+     and left the prayers panel, which is mostly wrapped copy, looking limp.
+     A soft edge travelling DOWN the paragraph reveals it line by line without
+     moving the block at all. Same mask vocabulary as the script write-on, and
+     like a clip edge it survives the scene dissolve, which a fade cannot.
+     The class is applied from JS, because whether a line wraps is measured at
+     runtime rather than known from its markup. */
+  .veiled {
+    -webkit-mask-image: linear-gradient(
+      180deg,
+      #000 0 var(--vl, 130%),
+      transparent calc(var(--vl, 130%) + 20%)
+    );
+    mask-image: linear-gradient(
+      180deg,
+      #000 0 var(--vl, 130%),
+      transparent calc(var(--vl, 130%) + 20%)
+    );
+  }
+
+  /* ── write-on ──────────────────────────────────────────────────────
+     The script face is the only type here that is meant to look WRITTEN, so it
+     is revealed left to right behind a soft-edged mask instead of being pushed
+     up from behind a clip like everything else. Great Vibes joins its letters,
+     so splitting it into per-character spans — the usual way to do this — would
+     break the connecting strokes; masking the whole line leaves the ligatures
+     intact and still reads as a hand moving across the paper.
+     --wr defaults past the end, so the name is fully visible with no JS at all
+     and on the reduced-motion path, which never runs the tween. */
+  [data-write] {
+    display: inline-block;
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      #000 0 var(--wr, 104%),
+      transparent calc(var(--wr, 104%) + 15%)
+    );
+    mask-image: linear-gradient(
+      90deg,
+      #000 0 var(--wr, 104%),
+      transparent calc(var(--wr, 104%) + 15%)
+    );
+  }
+
+  /* Light rake across the names, one composited transform. */
+  [data-sweep]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 38%,
+      rgba(255, 255, 255, 0.6) 50%,
+      transparent 62%
+    );
+    transform: translateX(var(--sweep, -125%));
+    mix-blend-mode: overlay;
+  }
+
+  /* Hexagonal panel — the shape from the reference's greeting frame. */
+  .hex {
+    background: #fbf8f2;
+    clip-path: polygon(50% 0, 100% 6%, 100% 94%, 50% 100%, 0 94%, 0 6%);
+    padding: 34px 22px 38px;
+  }
+
+  /* The closing block was cramped and unevenly spaced: venue/date, the closing
+     couplet and the button all sat at the same rhythm. Give the button real
+     separation so it reads as the action rather than another line of copy. */
+  .sc-cta .rule {
+    margin: 22px auto 20px;
+  }
+  .sc-cta .body {
+    line-height: 1.62;
+  }
+  .cta-wrap {
+    display: inline-block;
+    margin-top: 30px;
+    opacity: 0;
+  }
+  /* The button carries the same gold rake that crosses the couple's names —
+     the gesture this invitation already uses to mark the thing that matters —
+     rather than the scale pulse it had. A pill throbbing in and out is generic
+     tap-me noise and it fought its own comment, which admitted a button that
+     never stops moving becomes noise. A light travelling across the gold says
+     the same thing without the button ever changing size, and it belongs to
+     this page rather than to buttons in general.
+     The rake crosses in the first half of the cycle and the rest is a rest —
+     the pause is what keeps it from reading as a spinner. */
+  /* First attempt at this was quieter than the scale pulse it replaced: one
+     0.4-alpha band every 4.6s on a button that is only on screen for about nine
+     seconds, with the constant pulse removed. Net less movement, so it read as
+     unchanged. Brighter, wider, and passing roughly twice as often. */
+  @keyframes px-cta-rake {
+    0% {
+      transform: translateX(-160%);
+    }
+    42%,
+    100% {
+      transform: translateX(170%);
+    }
+  }
+  /* The arrow leans just after the light has passed it. Same period, so the two
+     are choreographed rather than merely both moving. */
+  @keyframes px-cta-lean {
+    0%,
+    46%,
+    100% {
+      transform: translateX(0);
+    }
+    62% {
+      transform: translateX(5px);
+    }
+  }
+  /* The gold ring brightens as the light crosses, so the edge and the rake are
+     one event rather than two things happening near each other. */
+  @keyframes px-cta-ring {
+    0%,
+    46%,
+    100% {
+      box-shadow:
+        inset 0 0 0 1px rgba(180, 154, 106, 0.5),
+        0 6px 18px -8px rgba(58, 54, 48, 0.5);
+    }
+    22% {
+      box-shadow:
+        inset 0 0 0 1px rgba(214, 190, 138, 0.95),
+        0 8px 22px -8px rgba(58, 54, 48, 0.58);
+    }
+  }
+  .cta::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      100deg,
+      transparent 28%,
+      rgba(255, 255, 255, 0.68) 50%,
+      transparent 72%
+    );
+    animation: px-cta-rake 3.2s ease-in-out infinite;
+  }
+  .cta-arrow {
+    display: inline-block;
+    animation: px-cta-lean 3.2s ease-in-out infinite;
+  }
+
+  .cta {
+    display: inline-block;
+    position: relative;
+    /* Clips the rake to the pill. */
+    overflow: hidden;
+    margin-top: 0;
+    padding: 13px 24px;
+    border-radius: 999px;
+    background: var(--dc-btn);
+    color: var(--dc-btn-text);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    /* Was carried by the pulse keyframes, so removing them would have taken the
+       button's shadow with it. The gold hairline is what makes this read as a
+       piece of the invitation rather than a generic dark pill — it is also the
+       resting frame of px-cta-ring, which brightens it as the light goes past. */
+    box-shadow:
+      inset 0 0 0 1px rgba(180, 154, 106, 0.5),
+      0 6px 18px -8px rgba(58, 54, 48, 0.5);
+    animation: px-cta-ring 3.2s ease-in-out infinite;
+    transition:
+      transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+      box-shadow 0.28s ease;
+    /* NOT opacity: 0 — the entrance moved to .cta-wrap. Leaving it here made the
+       button permanently invisible, because nothing animates .cta any more. */
+  }
+
+  /* This had no interaction states at all — no hover, no press, no focus ring.
+     On a touch device the press state is the only feedback there is that the
+     tap registered, and the focus ring is the only way a keyboard reaches it. */
+  /* animation: none on every one of these, not a paused state — a running
+     animation outranks a plain declaration, so px-cta-ring would swallow the
+     hover and press shadows and the lean would ignore the hover offset. The
+     interaction states take the button over completely while they apply. */
+  @media (hover: hover) {
+    .cta:hover {
+      animation: none;
+      transform: translateY(-2px);
+      box-shadow:
+        inset 0 0 0 1px rgba(214, 190, 138, 0.95),
+        0 14px 30px -10px rgba(58, 54, 48, 0.62);
+    }
+    .cta:hover .cta-arrow {
+      animation: none;
+      transform: translateX(5px);
+      transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+  }
+  .cta:active {
+    animation: none;
+    transform: translateY(0) scale(0.98);
+    box-shadow:
+      inset 0 0 0 1px rgba(214, 190, 138, 0.95),
+      0 4px 12px -8px rgba(58, 54, 48, 0.5);
+    transition-duration: 0.08s;
+  }
+  .cta:focus-visible {
+    outline: 2px solid var(--dc-gold);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cta,
+    .cta::after,
+    .cta-arrow {
+      animation: none;
+    }
+    /* The rake is mid-travel at rest, so without this a sheet of white sits
+       parked across the button. */
+    .cta::after {
+      display: none;
+    }
+  }
+
+  /* ══ atmosphere ═════════════════════════════════════════════════ */
+  /* Both of these were tuned against a dark maroon stage. At those strengths on
+     cream they read as dirt rather than atmosphere, so they are much lighter
+     here — a warm tint rather than a black one. */
+  .px-vig {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 120px 26px rgba(126, 100, 54, 0.11);
+  }
+  .px-grain {
+    position: absolute;
+    inset: -60px;
+    pointer-events: none;
+    opacity: 0.035;
+    mix-blend-mode: multiply;
+    will-change: transform;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+
+  /* ══ chrome ═════════════════════════════════════════════════════ */
+  .px-chrome {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 16px 16px;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .px-chrome.on {
+    pointer-events: auto;
+  }
+  .ticks {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 12px;
+  }
+  .tick {
+    flex: 1;
+    height: 2px;
+    border-radius: 2px;
+    background: rgba(120, 100, 70, 0.26);
+    overflow: hidden;
+  }
+  .tick i {
+    display: block;
+    height: 100%;
+    background: var(--dc-gold);
+    transform: scaleX(0);
+    transform-origin: 0 50%;
+  }
+  .ctrls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cbtn {
+    height: 34px;
+    min-width: 34px;
+    padding: 0 10px;
+    border: 1px solid rgba(140, 118, 80, 0.34);
+    border-radius: 999px;
+    background: rgba(255, 253, 248, 0.72);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: var(--dc-gold-deep);
+    font-size: 13px;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .cbtn-skip {
+    margin-left: auto;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+  #mute[aria-pressed='false'] {
+    opacity: 0.55;
+  }
+
+  .px-rm {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 18px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--dc-muted);
+    z-index: 30;
+  }
+  .px-rm a {
+    color: var(--dc-gold-deep);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .px-note-rm {
+      display: block;
+    }
+  }
+</style>
+
+<script>
+  import gsap from 'gsap';
+
+  /* How long a scene sits still after its last beat has landed, before the next
+     one starts crossing in. This replaced a fixed SCENE length: scenes now run
+     for however long their own content needs plus this, so a panel of eight
+     beats and one of four both get the same pause rather than the same total.
+     This is the number to tune for pacing. */
+  const HOLD = 4;
+  /* The head start the outgoing scene's content gets on the incoming scene. */
+  const LEAVE = 0.15;
+  /* Shortened from 1.8. A long background cross-dissolve leaves a wide window in
+   which anything that appears belongs visually to neither scene — the incoming
+   flowers were landing on the outgoing scene's still-opaque ground. A quicker
+   ground change lets content arrive right after it, instead of during it. */
+const XFADE = 1.1;
+  const OPEN = 2.6;
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const stage = document.getElementById('stage')!;
+  const env = document.getElementById('env')!;
+  const hero = document.getElementById('hero')!;
+  const coverTop = document.getElementById('cover-top')!;
+  const coverBot = document.getElementById('cover-bot')!;
+  const seal = document.getElementById('seal')!;
+  const hint = document.getElementById('hint')!;
+  const film = document.getElementById('film')!;
+  const chrome = document.getElementById('chrome')!;
+  const audio = document.getElementById('px-audio') as HTMLAudioElement;
+  const scenes = [...film.querySelectorAll<HTMLElement>('.px-scene')];
+
+  /* ── hand the music over to / ──────────────────────────────────
+     `/` plays this same file, so without this the song snaps back to
+     0:00 mid-phrase the moment we navigate — the one layer that
+     contradicts a handoff built to feel continuous.
+
+     On `pagehide` rather than wired to each exit, because there are four
+     ways out of here (the CTA, the skip button, the reduced-motion link
+     and the auto-navigate) and this covers all of them plus any added
+     later. `pagehide` over `beforeunload`: the latter is unreliable on
+     iOS Safari, which is most of the guest list. */
+  window.addEventListener('pagehide', () => {
+    try {
+      sessionStorage.setItem(
+        'muzik-handoff',
+        JSON.stringify({ t: audio.currentTime, playing: !audio.paused, at: Date.now() }),
+      );
+    } catch {
+      /* mod privasi — penyerahan hilang, muzik tetap main dari mula */
+    }
+  });
+
+  /* ── reduced motion ────────────────────────────────────────────
+     No sequence at all: show the card face, everything already in
+     place, and surface the real invite immediately. The full invite
+     carries all of this information anyway. */
+  if (reduced) {
+    /* No cross-dissolve — but the guest still gets the whole invitation.
+       Every scene is revealed at once, stacked in document order and
+       scrollable, rather than just the first (names) scene the timeline
+       would normally lead with. See .px-static in the stylesheet for the
+       layout change that makes stacking (instead of layering) possible. */
+    gsap.set(env, { autoAlpha: 0 });
+    gsap.set(film, { autoAlpha: 1 });
+    film.classList.add('px-static');
+    gsap.set(scenes, { autoAlpha: 1 });
+    /* .fil, .bq, .amp, .cta and .deco all animate in from opacity 0 in the
+       normal path, so they must be forced on here — otherwise the
+       reduced-motion path shows scenes with no corners, ampersands or CTA. */
+    gsap.set('.amp, .cta, .cta-wrap, .deco', { opacity: 1 });
+    document.querySelector<HTMLElement>('.px-rm')!.style.display = 'block';
+  } else {
+    /* Initial state, applied immediately. A fromTo only writes its "from"
+       values when the tween runs, so anything that must start hidden has to be
+       set here rather than left to the timeline. */
+    gsap.set(film, { autoAlpha: 0 });
+    gsap.set(chrome, { opacity: 0 });
+    gsap.set(hero, { scale: 1.12 });
+
+    /* ── per-scene sub-timeline ────────────────────────────────── */
+    function buildScene(sc: HTMLElement, i: number) {
+      const tl = gsap.timeline();
+      const flora = sc.querySelectorAll('.deco');
+      const tone = sc.querySelector('.sc-tone');
+      const hex = sc.querySelector('[data-hex]');
+      const type = sc.querySelector('.sc-type');
+
+      tl.set(sc, { visibility: 'visible' }).fromTo(
+        sc,
+        { opacity: 0 },
+        { opacity: 1, duration: XFADE, ease: 'power1.inOut' },
+        0,
+      );
+
+      /* Prayers: the brown ground arrives, then the hexagon grows out of the
+         middle top and bottom. That expansion IS the transition into this
+         scene, so it runs ahead of everything the panel contains. */
+      if (tone) {
+        tl.fromTo(tone, { opacity: 0 }, { opacity: 1, duration: XFADE * 0.8, ease: 'power1.inOut' }, 0);
+      }
+      if (hex) {
+        tl.fromTo(
+          hex,
+          { scaleY: 0, opacity: 1 },
+          { scaleY: 1, duration: 1.15, ease: 'power3.out' },
+          XFADE * 0.28,
+        );
+      }
+
+      /* Corners are anchored — no drift. They arrive one at a time, fading and
+         easing out of a slight zoom, then hold. Ornaments sliding around inside
+         an otherwise still frame read as loose compositing rather than depth. */
+      /* Arrival is a middle ground between the two failures seen so far.
+         Starting at XFADE * 0.35 put this scene's flowers on top of the previous
+         one — art bleeding across a cut. Waiting the FULL XFADE fixed that but
+         left the frame empty for over a second, because the incoming background
+         covers the outgoing scene long before this content shows up.
+         The overlap is solved at the other end instead: the outgoing scene's
+         content now leaves BEFORE this one starts (see the master timeline), so
+         arriving halfway through the dissolve collides with nothing.
+         Scene 0 has no predecessor to wait for, so it comes in sooner still. */
+      /* Content waits until the incoming GROUND is dominant, not merely until
+         the outgoing content has left. At XFADE * 0.3 the new scene was only
+         ~30% opaque, so its flowers read as sitting on the previous scene's
+         background. 0.78 puts them on their own ground.
+         Scene 0 has no previous ground to displace — the envelope is already
+         clearing — so it starts immediately. */
+      const ARRIVE = i === 0 ? 0 : XFADE * 0.78;
+
+      if (flora.length) {
+        tl.fromTo(
+          flora,
+          { opacity: 0, scale: 0.9 },
+          { opacity: 1, scale: 1, duration: 0.85, stagger: 0.12, ease: 'power2.out' },
+          ARRIVE,
+        );
+      }
+
+      /* Hold the type until the dissolve has essentially resolved, so it
+         writes onto a settled frame instead of through a fading one. */
+      const IN = ARRIVE + 0.18;
+
+      /* ── the type sets itself ────────────────────────────────────
+         Every direct child of .sc-inner is a beat — a masked line, the
+         ampersand, the rule, the CTA — revealed in document order, top to
+         bottom. Two things decide how a beat behaves, and both are read off
+         the type itself rather than applied uniformly:
+
+         WHAT IT DOES depends on the role of the face. A single gesture for
+         everything is what made this read mechanical: a 118% rise on
+         power3.out is a whip — it puts most of the travel in the first quarter
+         of the tween — so eight lines in a row snapped and hung like a
+         departure board. Ink does not arrive that way. So the script face is
+         written, the small caps close up their tracking, and everything else
+         rises into its mask on a long soft ease. Three gestures, each earned
+         by the type it is applied to.
+         Every one of them is a transform except the tracking, and that
+         exception is deliberately confined — see canTrack.
+
+         WHEN IT ARRIVES depends on what came before it. A constant gap makes
+         eight equal beats; grouping them makes stanzas. A label hugs the line
+         it introduces, a rule opens a real pause on both sides, and a name is
+         given room to finish being written before anything follows it. */
+
+      /** Which entrance a line gets. Ordered — first match wins. */
+      function roleOf(el: HTMLElement) {
+        if (el.hasAttribute('data-write')) return 'script';
+        if (el.classList.contains('eyebrow')) return 'eyebrow';
+        if (el.classList.contains('date') || el.classList.contains('big')) return 'display';
+        return 'copy';
+      }
+
+      /* How much wider than its resting value a tracked line starts, in em. */
+      const TRACK_IN = 0.17;
+
+      /** How far a line must drop to sit completely outside its own mask, or 0
+          if it should not use the mask at all.
+          Measured off the MASK, never the line. The two are not the same box —
+          a .mask around the bismillah measures 66.9px against a 52.0px line —
+          so translating by a percentage of the line leaves the top of it still
+          inside the clip, which is exactly the sliver this had: the greeting
+          was translated into the slot below it and sat there fully legible
+          while it was supposed to be hidden.
+          Wrapped text returns 0 and takes the fade path instead: its mask is as
+          tall as the entire paragraph, so there is no travel that hides it
+          without moving the whole block its own height. The 8px is slack for
+          webfonts landing after this is measured and growing the mask. */
+      function riseOutOf(line: HTMLElement, mask: HTMLElement) {
+        const range = document.createRange();
+        range.selectNodeContents(line);
+        if (range.getClientRects().length !== 1) return 0;
+        return mask.getBoundingClientRect().height + 8;
+      }
+
+      /** Can this line afford to be tracked open without reflowing the panel?
+          Opening the tracking makes the text WIDER, so a label already close to
+          the column edge would wrap mid-tween and shove everything below it
+          down — the one motion this page cannot have. Measure the real text
+          with a Range (the .line box is display:block and always reports the
+          full column) and only track a single-line label that still clears the
+          column by a wide margin. The 8% is not politeness: this runs before
+          the webfonts are guaranteed swapped in, so a line measured against a
+          narrower fallback face can still wrap once the real face lands.
+          Restricted to .eyebrow, and not because of width — because of cost.
+          letter-spacing is a LAYOUT property: every frame relays the column and
+          re-rasters the text over the paper texture, where a transform is
+          composited for free. Running it on five lines at once is what dropped
+          the info panel's frame rate. There is at most one .eyebrow live at any
+          moment in every scene (the stanza gaps guarantee it), so this is the
+          one place the effect is affordable. */
+      function canTrack(line: HTMLElement, growEm: number) {
+        if (roleOf(line) !== 'eyebrow') return false;
+        const range = document.createRange();
+        range.selectNodeContents(line);
+        if (range.getClientRects().length !== 1) return false;
+        const grow = growEm * parseFloat(getComputedStyle(line).fontSize) * line.textContent!.length;
+        return range.getBoundingClientRect().width + grow <= line.getBoundingClientRect().width * 0.92;
+      }
+
+      /** The pause BEFORE a beat, in seconds, from the pair either side of it. */
+      function leadIn(prev: HTMLElement, cur: HTMLElement) {
+        const line = (el: HTMLElement) => el.querySelector<HTMLElement>('.line');
+        const prevLine = line(prev);
+        // A name is still being written when its beat "starts" — wait for it.
+        if (prevLine?.hasAttribute('data-write')) return 0.75;
+        if (cur.classList.contains('cta-wrap')) return 0.8;
+        // The rule is a stanza break: silence on both sides of it.
+        if (cur.classList.contains('rule') || prev.classList.contains('rule')) return 0.58;
+        // A label belongs to the line under it, so it barely lets go.
+        if (prevLine && roleOf(prevLine) === 'label' && !cur.classList.contains('amp')) return 0.26;
+        // The ampersand sits between two names and hugs the second one.
+        if (prev.classList.contains('amp')) return 0.3;
+        return 0.44;
+      }
+
+      const beats = [...(sc.querySelector('.sc-inner')?.children ?? [])] as HTMLElement[];
+      let at = IN;
+
+      beats.forEach((beat, b) => {
+        if (b > 0) at += leadIn(beats[b - 1], beat);
+
+        if (beat.classList.contains('mask')) {
+          const line = beat.querySelector<HTMLElement>('.line')!;
+
+          if (roleOf(line) === 'script') {
+            /* Written, not moved. The mask edge crosses the name at roughly a
+               hand's pace; the line itself never travels, because a script face
+               sliding around reads as a sticker rather than ink. */
+            tl.fromTo(
+              line,
+              { '--wr': '-16%', opacity: 1 },
+              { '--wr': '104%', duration: 1.15, ease: 'power1.inOut' },
+              at,
+            );
+          } else if (canTrack(line, TRACK_IN)) {
+            /* Small letterspaced caps close up as they surface. Tracking is the
+               one property here that is genuinely typographic to animate — the
+               label composes itself rather than being delivered. Read the
+               resting value off the element so .eyebrow (0.3em) and .tiny
+               (0.12em) each settle to their own, not to a shared guess. */
+            const rest = getComputedStyle(line).letterSpacing;
+            const restPx = rest === 'normal' ? 0 : parseFloat(rest);
+            const from = restPx + TRACK_IN * parseFloat(getComputedStyle(line).fontSize);
+            tl.fromTo(
+              line,
+              { opacity: 0, y: 4, letterSpacing: `${from}px` },
+              {
+                opacity: 1,
+                y: 0,
+                letterSpacing: `${restPx}px`,
+                duration: 1.4,
+                ease: 'power2.out',
+              },
+              at,
+            );
+          } else {
+            const rise = riseOutOf(line, beat);
+
+            if (rise) {
+              /* A single line rises out of its mask. Transform only, opacity
+                 untouched, so the clip edge does all the revealing — and that
+                 matters more than it sounds: a scene cross-dissolves from
+                 opacity 0 while its first lines are arriving, so a line that
+                 reveals itself by fading is competing with the scene fading
+                 over it. A clip edge is a hard reference the eye can track.
+                 The ease is power2, not the power3 this started at — power3.out
+                 puts most of the distance in the first quarter of the tween,
+                 which is what made the original read as a whip.
+                 This is also where the Arabic lands, and it must: letter-spacing
+                 breaks the joins in a cursive script, so the bismillah can never
+                 take the tracked entrance. A transform is safe for any script. */
+              tl.fromTo(
+                line,
+                { y: rise },
+                {
+                  y: 0,
+                  duration: roleOf(line) === 'display' ? 1.55 : 1.35,
+                  ease: 'power2.out',
+                },
+                at,
+              );
+            } else {
+              /* Wrapped copy is unveiled from the top down. It cannot use the
+                 mask rise: that mask is as tall as the WHOLE paragraph, so
+                 clearing it means sliding every line a full block height, which
+                 reads as a slab being shoved rather than type being set.
+                 A fade was the previous answer and it was far too meek — the
+                 prayers panel is mostly wrapped copy and looked limp. The veil
+                 reveals line by line without the block moving, and carries a
+                 small lift so it still has some weight behind it. */
+              line.classList.add('veiled');
+              tl.fromTo(
+                line,
+                { '--vl': '-24%', y: 14 },
+                { '--vl': '130%', y: 0, duration: 1.5, ease: 'power2.out' },
+                at,
+              );
+            }
+          }
+
+          /* The gold rake follows its own name, once that name is written. */
+          if (line.hasAttribute('data-sweep')) {
+            tl.fromTo(
+              line,
+              { '--sweep': '-125%' },
+              { '--sweep': '145%', duration: 1.6, ease: 'power2.inOut' },
+              at + 0.95,
+            );
+          }
+        } else if (beat.classList.contains('amp')) {
+          /* Was 0.6 → 1, which is a pop. At this size the ampersand is a mark
+             of punctuation between two names, so it breathes in instead — but
+             0.94 was so slight it read as nothing against the scene dissolve,
+             the same failure as the fading lines below. It has no mask to rise
+             into, so the scale has to carry it. */
+          tl.fromTo(
+            beat,
+            { opacity: 0, scale: 0.84 },
+            { opacity: 1, scale: 1, duration: 1.1, ease: 'power2.out' },
+            at,
+          );
+        } else if (beat.classList.contains('rule')) {
+          tl.fromTo(
+            beat.querySelector('[data-rule]'),
+            { scaleX: 0 },
+            { scaleX: 1, duration: 1.5, ease: 'power2.inOut' },
+            at,
+          );
+        } else if (beat.classList.contains('cta-wrap')) {
+          tl.fromTo(beat, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.9 }, at);
+        }
+      });
+
+      /* Everything added so far IS the content, so the timeline's own length is
+         when this scene has finished arriving. Reading it back beats keeping a
+         running total by hand: add a beat, change a duration, retime the sweep,
+         and this stays correct with nothing to update. */
+      const contentEnd = tl.duration();
+
+      /* Only the type drifts within a scene — the paper pans once across the
+         whole film, outside any scene, so it never restarts. Added here rather
+         than at the top because it has to span the scene's WHOLE window, hold
+         included, and that length is not known until the content is measured. */
+      tl.fromTo(
+        type,
+        { yPercent: 1.6 },
+        { yPercent: -1.6, duration: contentEnd + HOLD, ease: 'none' },
+        0,
+      );
+
+      return { tl, contentEnd };
+    }
+
+    /* ── master ────────────────────────────────────────────────────
+       Absolute positions throughout. Relative labels compound as the
+       timeline grows and open black gaps between scenes. */
+    const master = gsap.timeline({ paused: true });
+
+    /* ── cadence ───────────────────────────────────────────────────
+       Build every scene up front, because each one has to report how long its
+       own content takes before anything can be positioned. Scenes are NOT a
+       fixed length: a panel of eight beats genuinely needs longer than one of
+       four, and forcing them to share a constant is what left the info panel
+       with a 1.55s pause while the names sat on a 3.91s one. Now every scene
+       gets the same HOLD after its last beat settles, and its length falls out
+       of that. Even breathing, and the film is shorter than padding every
+       scene to fit the longest would have made it. */
+    const built = scenes.map((sc, i) => buildScene(sc, i));
+
+    /* Scene 0 opens as the covers clear rather than waiting for the envelope to
+       settle; every later scene begins where its predecessor's hold ran out.
+       LEAVE is the head start the outgoing content gets on the incoming scene,
+       so subtracting it here is what makes HOLD the true pause: the old panel
+       begins clearing exactly HOLD seconds after its own last beat landed. */
+    const starts = [OPEN * 0.72];
+    for (let i = 0; i < built.length - 1; i++) {
+      starts.push(starts[i] + built[i].contentEnd + HOLD + LEAVE);
+    }
+    const filmDur = starts[starts.length - 1] + built[built.length - 1].contentEnd + HOLD;
+
+    /* One continuous pan of the paper across the entire film. Running this per
+       scene is what would make the backdrop visibly restart at every dissolve —
+       the exact redundancy the carry-forward rule is about. */
+    master.fromTo(
+      document.getElementById('film-bed')!,
+      { xPercent: -1.8, yPercent: 1.3, scale: 1.06 },
+      { xPercent: 1.8, yPercent: -1.3, scale: 1, duration: filmDur, ease: 'none' },
+      0,
+    );
+
+    /* The split reveal. The seal clears first — it straddles the seam, so
+       parting the covers while it is still drawn would tear it in half.
+       Covers then travel a little further than their own height so nothing
+       lingers at the screen edge, and the hero settles from a slight push-in
+       so the reveal reads as moving into the invitation rather than two
+       panels sliding away. */
+    master
+      .to(seal, { opacity: 0, scale: 0.78, duration: 0.34, ease: 'power2.in' }, 0)
+      .to(hint, { opacity: 0, duration: 0.28 }, 0)
+      .to([coverTop, coverBot], { y: 0, duration: 0.12, ease: 'power1.out' }, 0)
+      .to(
+        coverTop,
+        { yPercent: -104, duration: OPEN * 0.62, ease: 'power2.inOut' },
+        0.22,
+      )
+      .to(
+        coverBot,
+        { yPercent: 104, duration: OPEN * 0.62, ease: 'power2.inOut' },
+        0.22,
+      )
+      .to(hero, { scale: 1, duration: OPEN * 0.8, ease: 'power1.out' }, 0.22)
+      // Cross into the film once the covers are clear.
+      /* Brought forward from 0.78. The covers are clear of the frame well
+         before the open finishes, so the film can start arriving while they
+         are still travelling — waiting for the envelope to fully settle was
+         what left the hero sitting on an empty frame. Scene 0's content then
+         begins the moment the scene does. */
+      .to(film, { autoAlpha: 1, duration: XFADE * 0.62, ease: 'power1.inOut' }, OPEN * 0.6)
+      .to(env, { autoAlpha: 0, duration: XFADE * 0.62, ease: 'power1.inOut' }, OPEN * 0.6)
+      .to(chrome, { opacity: 1, duration: 0.6 }, OPEN * 0.85);
+
+    scenes.forEach((sc, i) => {
+      const t = starts[i];
+      /* The last scene has no successor, so its "next start" is the end of the
+         film — that is what the progress tick measures against. */
+      const nextStart = i < scenes.length - 1 ? starts[i + 1] : filmDur;
+      master.add(built[i].tl, t);
+      master.fromTo(
+        `[data-tick="${i}"] i`,
+        { scaleX: 0 },
+        { scaleX: 1, duration: nextStart - t, ease: 'none' },
+        t,
+      );
+
+      if (i < scenes.length - 1) {
+        /* Not fading this scene out. Scenes stack in DOM order so the next is
+           painted on top; cross-fading both composites two half-opacity layers
+           and the frame goes muddy. This one holds underneath and is hidden
+           once the incoming scene is fully opaque. */
+        master.set(sc, { visibility: 'hidden' }, nextStart + XFADE);
+        /* Both the type AND the decoration leave before the next scene begins,
+           finishing at roughly the moment it starts. This is what buys the
+           incoming scene permission to arrive mid-dissolve without collision —
+           previously only .sc-inner left, so the outgoing flowers were still on
+           screen when the next scene's flowers faded up over them. */
+        master.to(
+          [sc.querySelector('.sc-inner'), ...sc.querySelectorAll('.deco')],
+          { opacity: 0, duration: 0.5, ease: 'power2.in' },
+          nextStart - LEAVE,
+        );
+        master.to(
+          sc.querySelector('.sc-inner'),
+          { yPercent: -4, duration: 0.5, ease: 'power2.in' },
+          nextStart - LEAVE,
+        );
+      }
+    });
+
+    /* ── auto-navigate ────────────────────────────────────────────
+       The CTA's own fade-in resolves a couple of seconds before the master
+       timeline ends, so by the time playback reaches this point the closing
+       line has already settled. Wait a further ~4s of real time (deliberately
+       not tied to the timeline, which has already stopped by then) before
+       sending the guest on to the real invite — long enough that someone
+       re-reading the closing line is not yanked away mid-read, and long
+       enough that the replay control is still comfortably reachable.
+       Cancelled outright if the guest taps the CTA, the skip link, or
+       replay before it fires. */
+    let autoNavTimer: ReturnType<typeof gsap.delayedCall> | null = null;
+    let autoNavCancelled = false;
+
+    master.call(() => {
+      if (autoNavCancelled) return;
+      autoNavTimer = gsap.delayedCall(4, () => {
+        if (autoNavCancelled) return;
+        /* Fade the whole stage out before leaving. Navigating straight from a
+           fully-lit frame reads as the page being yanked away; a short fade to
+           the invite's own cream makes the two pages feel continuous. The
+           navigation is driven from onComplete so a cancel during the fade
+           still stops it. */
+        gsap.to(stage, {
+          opacity: 0,
+          duration: 0.9,
+          ease: 'power2.inOut',
+          onComplete: () => {
+            if (!autoNavCancelled) window.location.href = '/';
+          },
+        });
+      });
+    });
+
+    // Grain crawl: transform only, never repaints the noise.
+    gsap.to('#grain', { x: 20, y: -16, duration: 0.5, repeat: -1, yoyo: true, ease: 'none' });
+
+    /* ── controls ──────────────────────────────────────────────── */
+    let started = false;
+
+    function start() {
+      if (started) return;
+      started = true;
+      chrome.classList.add('on');
+      master.play();
+      // The tap that opens the envelope is also the gesture iOS requires
+      // before audio is allowed to play.
+      playMusic();
+    }
+
+    /* `on` is the button's pressed state — true means the music IS playing.
+       The name reads backwards; left alone here so this fix changes behaviour
+       in one place only. */
+    function setMute(on: boolean) {
+      document.getElementById('mute')!.setAttribute('aria-pressed', String(on));
+    }
+
+    /* One rejected play() used to be the end of it. The guest was left with a
+       music note at 55% opacity in the corner and nothing else to suggest the
+       invitation had sound at all, which is indistinguishable from "the audio
+       is broken" — and this link is shared over WhatsApp, whose in-app browser
+       is one of several environments that reject the first call even when it
+       is made inside a genuine tap. `/` has retried on the next gesture since
+       it was written (see MuzikLatar); this page never did. */
+    function playMusic() {
+      audio.play().then(() => setMute(true)).catch(() => {
+        setMute(false);
+        armRetry();
+      });
+    }
+
+    let retryArmed = false;
+    function armRetry() {
+      if (retryArmed) return;
+      retryArmed = true;
+      const retry = (e: Event) => {
+        const t = e.target;
+        // A tap on the music button is that button's own decision. Return
+        // WITHOUT disarming, or the guest's first tap on it would spend the
+        // one retry this page gets.
+        if (t instanceof Element && t.closest('#mute')) return;
+        retryArmed = false;
+        window.removeEventListener('pointerdown', retry);
+        window.removeEventListener('touchstart', retry);
+        window.removeEventListener('keydown', retry);
+        playMusic();
+      };
+      window.addEventListener('pointerdown', retry, { passive: true });
+      window.addEventListener('touchstart', retry, { passive: true });
+      window.addEventListener('keydown', retry);
+    }
+
+    /* A file that never loads leaves a control that can never do anything.
+       Hide it rather than offer a button that silently fails — the same call
+       MuzikLatar makes on `/`. */
+    audio.addEventListener('error', () => {
+      document.getElementById('mute')!.style.display = 'none';
+    });
+
+    /* Press feedback: the covers ease apart a couple of pixels under the
+       finger and release on open. Costs nothing and it is the difference
+       between tapping a picture of an envelope and unsticking a real one. */
+    stage.addEventListener('pointerdown', (e) => {
+      if (started || (e.target as HTMLElement).closest('#chrome')) return;
+      gsap.to(coverTop, { y: -5, duration: 0.22, ease: 'power2.out' });
+      gsap.to(coverBot, { y: 5, duration: 0.22, ease: 'power2.out' });
+    });
+    stage.addEventListener('pointercancel', () => {
+      if (started) return;
+      gsap.to([coverTop, coverBot], { y: 0, duration: 0.3, ease: 'power2.out' });
+    });
+
+    seal.addEventListener('click', (e) => {
+      e.stopPropagation();
+      start();
+    });
+
+    // Tap anywhere during playback jumps to the next scene.
+    stage.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('#chrome') || t.closest('.cta')) return;
+      if (!started) {
+        start();
+        return;
+      }
+      /* Scenes are no longer evenly spaced, so which one is on screen cannot be
+         divided out of the elapsed time — walk the actual start times. */
+      const now = master.time();
+      let idx = 0;
+      for (let k = 0; k < starts.length; k++) if (now >= starts[k]) idx = k;
+      const next = idx + 1;
+      if (next < starts.length) master.seek(starts[next]);
+    });
+
+    document.getElementById('replay')!.addEventListener('click', (e) => {
+      e.stopPropagation();
+      /* Replay can land mid fade-out. Killing the timer stops the navigation but
+         leaves the stage invisible, so put it back. */
+      gsap.killTweensOf(stage);
+      gsap.set(stage, { opacity: 1 });
+      gsap.set('[data-tick] i', { scaleX: 0 });
+      gsap.set(scenes, { visibility: 'hidden', opacity: 0 });
+      gsap.set([coverTop, coverBot], { clearProps: 'all' });
+      gsap.set([seal, hint], { clearProps: 'all' });
+      gsap.set(hero, { scale: 1.12 });
+      gsap.set(film, { autoAlpha: 0 });
+      gsap.set(env, { autoAlpha: 1 });
+      master.pause(0);
+      started = false;
+      chrome.classList.remove('on');
+      gsap.set(chrome, { opacity: 0 });
+      // Cancel any pending auto-navigate and re-arm it for the next play-through.
+      autoNavTimer?.kill();
+      autoNavTimer = null;
+      autoNavCancelled = false;
+    });
+
+    // Tapping the CTA or the skip link is the guest choosing to leave now —
+    // the auto-navigate must not also fire (or re-fire) after that.
+    document.getElementById('cta')!.addEventListener('click', () => {
+      autoNavCancelled = true;
+      autoNavTimer?.kill();
+    });
+    document.querySelector('.cbtn-skip')!.addEventListener('click', () => {
+      autoNavCancelled = true;
+      autoNavTimer?.kill();
+    });
+
+    document.getElementById('mute')!.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (audio.paused) {
+        // Was a bare .catch(() => {}) — a tap that failed did nothing at all
+        // and left nothing armed. Route it through the same recovery path.
+        playMusic();
+      } else {
+        audio.pause();
+        setMute(false);
+      }
+    });
+
+    // Expose for measurement from the harness.
+    (window as any).__px = master;
+    (window as any).__pxStart = start;
+  }
+</script>

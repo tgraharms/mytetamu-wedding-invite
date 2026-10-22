@@ -1,0 +1,84 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+import { mapEmbedUrl } from '../lib/links';
+
+// Tile ikon rasmi (fail dalam public/icons/). Apple Maps sudah berbentuk tile penuh.
+const tiles = [
+  {
+    href: site.venue.maps.waze,
+    name: 'Waze',
+    icon: '/icons/waze.svg',
+    bg: '#33CCFF',
+    full: false,
+  },
+  {
+    href: site.venue.maps.googleMaps,
+    name: 'Google Maps',
+    icon: '/icons/google-maps.png',
+    bg: '#FFFFFF',
+    full: false,
+  },
+  {
+    href: site.venue.maps.appleMaps,
+    name: 'Apple Maps',
+    icon: '/icons/apple-maps.svg',
+    bg: 'transparent',
+    full: true,
+  },
+];
+---
+
+<Section id="cara-ke-sana" title="Cara Ke Sana" bg="bg-lokasi" card>
+  <p class="text-center text-lg font-medium">{site.venue.name}</p>
+  <p class="mt-1 text-center text-base text-stone-700">{site.venue.address}</p>
+  <div class="relative mt-6 overflow-hidden rounded-xl border border-stone-200">
+    <iframe
+      src={mapEmbedUrl}
+      title={`Peta ke ${site.venue.name}`}
+      class="h-64 w-full"
+      loading="lazy"
+      referrerpolicy="no-referrer-when-downgrade"></iframe>
+    <button
+      id="map-overlay"
+      type="button"
+      class="absolute inset-0 flex items-end justify-center bg-transparent pb-3"
+      aria-label="Aktifkan peta"
+    >
+      <span class="rounded-full bg-stone-800/80 px-4 py-1.5 text-xs text-stone-50">
+        Sentuh untuk gerakkan peta
+      </span>
+    </button>
+  </div>
+  <div class="mt-6 flex items-start justify-center gap-8">
+    {
+      tiles.map((t) => (
+        <a
+          href={t.href}
+          target="_blank"
+          rel="noopener"
+          aria-label={`Buka di ${t.name}`}
+          class="flex w-16 flex-col items-center gap-2"
+        >
+          {t.full ? (
+            <img src={t.icon} alt="" class="h-14 w-14 rounded-[22%] shadow-sm" loading="lazy" />
+          ) : (
+            <span
+              class="flex h-14 w-14 items-center justify-center rounded-[22%] border border-stone-200 shadow-sm"
+              style={`background:${t.bg}`}
+            >
+              <img src={t.icon} alt="" class="h-9 w-9" loading="lazy" />
+            </span>
+          )}
+          <span class="text-center text-xs text-stone-600">{t.name}</span>
+        </a>
+      ))
+    }
+  </div>
+</Section>
+
+<script>
+  // Halang iframe peta "menangkap" skrol sehingga tetamu sengaja menyentuhnya.
+  const overlay = document.getElementById('map-overlay')!;
+  overlay.addEventListener('click', () => overlay.remove(), { once: true });
+</script>

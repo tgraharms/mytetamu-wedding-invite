@@ -1,0 +1,215 @@
+---
+import Section from './Section.astro';
+import { site } from '../content/site';
+import { whatsappUrl } from '../lib/links';
+import { CONTACTS } from '../lib/portfolioContent';
+---
+
+<Section id="penutup" title="Ucapan & Doa" bg="bg-penutup" muted>
+  <p id="doa-empty" class="mt-3 hidden text-center text-sm text-stone-600">
+    Jadilah yang pertama menghantar ucapan. 💐
+  </p>
+  <div id="doa-wall" class="doa-fade -mx-6 mt-4 hidden overflow-hidden">
+    <div id="doa-track" class="flex w-max gap-3 px-6"></div>
+  </div>
+
+  <div class="mt-5 flex justify-center">
+    <button id="doa-toggle" type="button" class="btn-outline inline-flex w-fit items-center gap-2 rounded-full px-8">
+      <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" />
+      </svg>
+      Hantar Ucapan Anda
+    </button>
+  </div>
+  <form id="doa-form" class="mt-4 hidden space-y-4" novalidate>
+    <div>
+      <label for="doa-nama" class="mb-1 block text-sm font-medium">Nama</label>
+      <input id="doa-nama" name="nama" type="text" autocomplete="name" maxlength="100" required class="input" />
+    </div>
+    <div>
+      <label for="doa-mesej" class="mb-1 block text-sm font-medium">Ucapan / doa anda</label>
+      <textarea id="doa-mesej" name="mesej" rows="3" maxlength="500" required class="input"></textarea>
+    </div>
+    <p id="doa-error" aria-live="polite" class="hidden text-center text-sm text-red-600">
+      Maaf, ada masalah teknikal. Sila cuba sekali lagi.
+    </p>
+    <div class="flex justify-center">
+      <button id="doa-submit" type="submit" class="btn px-10">
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z" />
+        </svg>
+        <span data-label>Hantar</span>
+      </button>
+    </div>
+  </form>
+  <p id="doa-thanks" aria-live="polite" class="mt-4 hidden rounded-xl border border-green-200 bg-green-50 p-4 text-center text-sm text-green-800">
+    Terima kasih! Ucapan anda telah diterima. 🤲
+  </p>
+
+  <p class="mt-20 text-center text-sm text-stone-600">Sebarang pertanyaan, WhatsApp kami:</p>
+  <div class="mt-3 flex justify-center gap-3">
+    {
+      CONTACTS.map((c) => (
+        <a
+          href={c.phone ? whatsappUrl(c.phone) : undefined}
+          target={c.phone ? '_blank' : undefined}
+          rel={c.phone ? 'noopener' : undefined}
+          class="flex min-h-11 items-center justify-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-2 text-sm font-medium text-stone-700"
+          style="text-shadow: none"
+        >
+          <img src="/icons/whatsapp.svg" alt="" aria-hidden="true" class="h-4.5 w-4.5" />
+          {c.name}
+        </a>
+      ))
+    }
+  </div>
+
+  <p class="font-display mt-10 text-center text-base italic text-[#b49a6a]" style="text-shadow: none">
+    {site.penutup.contacts[0].name} &amp; {site.penutup.contacts[1].name} &middot; 2026
+  </p>
+</Section>
+
+<style>
+  /* Lembut di tepi supaya kad kelihatan "masuk" dan "keluar" dari skrin. */
+  .doa-fade {
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  }
+  :global(.doa-marquee) {
+    animation: doa-scroll var(--doa-duration, 40s) linear infinite;
+  }
+  @keyframes doa-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(.doa-marquee) {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  import { supabase } from '../lib/supabase';
+  import { getSavedName, saveName } from '../lib/guest';
+
+  const wall = document.getElementById('doa-wall')!;
+  const track = document.getElementById('doa-track')!;
+  const empty = document.getElementById('doa-empty')!;
+  const toggle = document.getElementById('doa-toggle')!;
+  const form = document.getElementById('doa-form') as HTMLFormElement;
+  const namaInput = document.getElementById('doa-nama') as HTMLInputElement;
+  const mesejInput = document.getElementById('doa-mesej') as HTMLTextAreaElement;
+  const submitBtn = document.getElementById('doa-submit') as HTMLButtonElement;
+  const errorBox = document.getElementById('doa-error')!;
+  const thanksBox = document.getElementById('doa-thanks')!;
+
+  function cardEl(nama: string, mesej: string): HTMLElement {
+    const card = document.createElement('div');
+    card.className =
+      'flex w-64 shrink-0 flex-col rounded-2xl border border-stone-200 bg-white/95 p-5 shadow-sm';
+    card.style.textShadow = 'none';
+    const m = document.createElement('p');
+    m.className = 'flex-1 text-left italic text-stone-700';
+    m.textContent = `“${mesej}”`;
+    const hr = document.createElement('hr');
+    hr.className = 'mt-4 border-stone-200';
+    const n = document.createElement('p');
+    n.className = 'mt-3 text-right text-xs font-medium uppercase tracking-widest text-stone-500';
+    n.textContent = nama;
+    card.append(m, hr, n);
+    return card;
+  }
+
+  function startMarquee(): void {
+    // Gandakan senarai supaya gelung translateX(-50%) kelihatan lancar.
+    track.querySelectorAll('[data-clone]').forEach((c) => c.remove());
+    const cards = Array.from(track.children) as HTMLElement[];
+    for (const c of cards) {
+      const clone = c.cloneNode(true) as HTMLElement;
+      clone.setAttribute('data-clone', '');
+      clone.setAttribute('aria-hidden', 'true');
+      track.appendChild(clone);
+    }
+    // Laju tetap (~35px/s) tanpa mengira bilangan kad.
+    const half = track.scrollWidth / 2;
+    track.style.setProperty('--doa-duration', `${Math.max(20, half / 35)}s`);
+    track.classList.add('doa-marquee');
+  }
+
+  function render(rows: { nama: string; mesej: string }[]): void {
+    if (rows.length === 0) {
+      empty.classList.remove('hidden');
+      wall.classList.add('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+    wall.classList.remove('hidden');
+    track.classList.remove('doa-marquee');
+    track.replaceChildren(...rows.map((r) => cardEl(r.nama, r.mesej)));
+    startMarquee();
+  }
+
+  async function load(): Promise<void> {
+    try {
+      const { data, error } = await supabase
+        .from('doa')
+        .select('nama, mesej')
+        .order('created_at', { ascending: false })
+        .limit(50)
+        .abortSignal(AbortSignal.timeout(15_000));
+      if (!error && data) render(data);
+    } catch {
+      /* biar senyap — dinding doa bukan kritikal */
+    }
+  }
+  load();
+
+  toggle.addEventListener('click', () => {
+    form.classList.toggle('hidden');
+    thanksBox.classList.add('hidden');
+    if (!form.classList.contains('hidden')) {
+      if (!namaInput.value) namaInput.value = getSavedName();
+      (namaInput.value ? mesejInput : namaInput).focus();
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nama = namaInput.value.trim();
+    const mesej = mesejInput.value.trim();
+    if (!nama || !mesej) return;
+
+    submitBtn.disabled = true;
+    submitBtn.querySelector('[data-label]')!.textContent = 'Menghantar…';
+    errorBox.classList.add('hidden');
+
+    let failed = false;
+    try {
+      const { error } = await supabase
+        .from('doa')
+        .insert({ nama, mesej })
+        .abortSignal(AbortSignal.timeout(15_000));
+      failed = error !== null;
+    } catch {
+      failed = true;
+    }
+
+    submitBtn.disabled = false;
+    submitBtn.querySelector('[data-label]')!.textContent = 'Hantar';
+    if (failed) {
+      errorBox.classList.remove('hidden');
+      return;
+    }
+
+    saveName(nama);
+    mesejInput.value = '';
+    form.classList.add('hidden');
+    thanksBox.classList.remove('hidden');
+    load();
+  });
+</script>

@@ -1,0 +1,155 @@
+---
+/**
+ * Portfolio mode only: the strip that says this is a demo, the toast that
+ * answers every save, and the once-per-tab reset of the guest memory.
+ *
+ * Style and script are inline on purpose. An inline block ships only where
+ * this component renders. A bundled one would ride along in the live site's
+ * CSS and JS just because the layouts import this file. global.css also keeps
+ * this file out of the Tailwind scan for the same reason.
+ */
+import { DEMO_GUEST_MEMORY, DEMO_PASSPHRASE, DEMO_SAVED_EVENT, DEMO_SESSION_KEY, REPO_URL } from '../lib/portfolio';
+
+interface Props {
+  /** Pin the strip over the page instead of pushing the page down (the full-height /jemputan stage). */
+  overlay?: boolean;
+}
+
+const { overlay = false } = Astro.props;
+
+// The four pages of the demo, in the order a visitor should meet them. The
+// link to the page you are on is left out; a trailing slash does not change
+// which page that is (/special/ is /special, and / stays /).
+const pages = [
+  { href: '/', label: 'Invite' },
+  { href: '/special', label: 'Gift registry' },
+  { href: '/jemputan', label: 'Animated invite' },
+  { href: '/urus', label: 'Owner view' },
+];
+const here = Astro.url.pathname.replace(/\/+$/, '') || '/';
+const onBoard = here === '/urus';
+// On the board the way back to the invite is the guest's side of the demo.
+const links = pages
+  .filter((page) => page.href !== here)
+  .map((page) => (onBoard && page.href === '/' ? { ...page, label: 'Guest view' } : page));
+---
+
+<div class:list={['pf-banner', { 'pf-overlay': overlay }]} lang="en" role="note">
+  <span>
+    {onBoard
+      ? `Owner view of the demo. Password: ${DEMO_PASSPHRASE}. Sample data, nothing is saved.`
+      : 'Portfolio demo of a real wedding site. Sample data, nothing is saved.'}
+  </span>
+  <span class="pf-links">
+    {links.map((page) => <a href={page.href}>{page.label}</a>)}
+    {REPO_URL && <a href={REPO_URL} target="_blank" rel="noopener">About this project</a>}
+  </span>
+</div>
+<div id="pf-toast" class="pf-toast" lang="en" role="status" aria-live="polite"></div>
+
+<style is:inline>
+  .pf-banner {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px;
+    padding: 8px 16px; background: #1c1917; color: #fafaf9; text-align: center;
+    font: 500 13px/1.4 Mulish, system-ui, sans-serif;
+  }
+  /* Floats over a page whose stage is exactly one screen tall, so the strip
+     cannot push it past the fold. Must stay below .pf-banner to win the tie. */
+  .pf-overlay {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 900;
+    padding: 4px 16px; background: rgb(28 25 23 / 0.88);
+    font-size: 12px;
+  }
+  /* The page links wrap as one group, below the message when the strip is
+     narrow and beside it when there is room. */
+  .pf-links {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 14px;
+  }
+  /* Vertical padding lifts the tap height to 26px; the matching negative
+     margin keeps each link's layout height unchanged. Each link's box reaches
+     4px past its layout box, so the 8px gap between wrapped rows is exactly
+     what keeps two rows of links from overlapping. */
+  .pf-banner a {
+    display: inline-block; padding: 4px 0; margin: -4px 0; white-space: nowrap;
+    color: #e7d7b0; text-decoration: underline;
+  }
+  /* Always in the page, empty and see-through: a live region that is removed
+     from rendering (display: none) is not reliably announced when it returns.
+     width: max-content stops left: 50% from halving the shrink-to-fit width. */
+  .pf-toast {
+    position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%); z-index: 60;
+    width: max-content; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 999px;
+    background: #1c1917; color: #fafaf9; box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
+    font: 500 14px/1.4 Mulish, system-ui, sans-serif;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .pf-toast.pf-show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    .pf-toast { transition: none; }
+  }
+</style>
+
+<script define:vars={{ eventName: DEMO_SAVED_EVENT, sessionKey: DEMO_SESSION_KEY, guestMemory: DEMO_GUEST_MEMORY }}>
+  // Runs while the page parses, before any module script reads localStorage.
+  try {
+    if (!sessionStorage.getItem(sessionKey)) {
+      sessionStorage.setItem(sessionKey, '1');
+      for (const key of guestMemory) localStorage.removeItem(key);
+    }
+  } catch {
+    /* storage blocked: nothing was remembered either */
+  }
+
+  const toast = document.getElementById('pf-toast');
+  const message = 'Portfolio demo. Nothing was saved.';
+  let timer;
+  let clearTimer;
+  let frame;
+  window.addEventListener(eventName, () => {
+    if (!toast) return;
+    // A live region only announces a change. Empty it first and refill on the
+    // next frame so a second save, with the same words, is read out again.
+    clearTimeout(clearTimer);
+    toast.textContent = '';
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      toast.textContent = message;
+      toast.classList.add('pf-show');
+    });
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      cancelAnimationFrame(frame);
+      toast.classList.remove('pf-show');
+      // Keep the words on screen while the 0.2s fade runs; a new save cancels this.
+      clearTimer = setTimeout(() => {
+        toast.textContent = '';
+      }, 200);
+    }, 3500);
+  });
+
+  // The music button is pinned to the top corner of the screen, which is where
+  // this strip sits, and it is the only element that collides with it. While the
+  // strip is in view the button is pushed down below it, then it rises back as
+  // the strip scrolls away. Pages without the button (/urus, /jemputan) skip it.
+  const strip = document.querySelector('.pf-banner');
+  let placeQueued = false;
+  function placeMusicButton() {
+    const wrap = document.querySelector('.muzik-wrap');
+    if (!strip || !wrap) return;
+    const offset = Math.max(0, Math.round(strip.getBoundingClientRect().bottom));
+    wrap.style.top = offset + 'px';
+  }
+  function placeMusicButtonSoon() {
+    if (placeQueued) return;
+    placeQueued = true;
+    requestAnimationFrame(() => {
+      placeQueued = false;
+      placeMusicButton();
+    });
+  }
+  // The button is parsed after this strip, so it does not exist yet.
+  document.addEventListener('DOMContentLoaded', placeMusicButton);
+  window.addEventListener('load', placeMusicButton, { passive: true });
+  window.addEventListener('resize', placeMusicButton, { passive: true });
+  window.addEventListener('scroll', placeMusicButtonSoon, { passive: true });
+</script>

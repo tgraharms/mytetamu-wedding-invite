@@ -1,0 +1,43 @@
+---
+import LabLayout from '../../layouts/LabLayout.astro';
+import { ScrollSequence, TapTransition, BranchPoint } from '../../components/lab/MotionDemo';
+---
+
+<LabLayout title="Motion" tag="Motion (Framer Motion)">
+  <section class="lab-section">
+    <p class="lab-eyebrow">Probe 01</p>
+    <h1 class="lab-h" style="font-size:52px">Motion</h1>
+    <p class="lab-p">
+      React-based. Animation is a function of state, so a branch is just
+      <code>useState</code> plus <code>AnimatePresence</code>. Scroll down —
+      three probes, each hydrated as it comes into view.
+    </p>
+    <p class="lab-p" style="font-size:13px">
+      Watch the meter up top. <b>jank</b> counts frames over 50&nbsp;ms.
+    </p>
+  </section>
+
+  <!--
+    client:load, not client:visible. Motion server-renders its `initial` state
+    into the HTML, so with client:visible these sections ship as opacity:0 and
+    stay blank until React downloads, parses and hydrates. On a slow phone that
+    is a visibly empty screen. See /lab for the write-up.
+  -->
+  <section class="lab-section">
+    <ScrollSequence client:load />
+  </section>
+
+  <section class="lab-section">
+    <TapTransition client:load />
+  </section>
+
+  <section class="lab-section">
+    <BranchPoint client:load />
+  </section>
+
+  <section class="lab-section" style="min-height:60svh">
+    <p class="lab-eyebrow">End</p>
+    <h2 class="lab-h">Probe complete</h2>
+    <p class="lab-p"><a href="/lab" style="color:var(--dc-gold-deep)">← back to lab</a></p>
+  </section>
+</LabLayout>

@@ -1,0 +1,147 @@
+---
+// Ikon inline supaya tiada fail tambahan; strok mengikut warna teks semasa.
+// `watch` = id bahagian yang diperhati untuk keadaan aktif (scroll-spy).
+const chips = [
+  {
+    href: '#butiran',
+    watch: 'butiran',
+    label: 'Butiran',
+    icon: 'M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-3M9 7h6M9 11h6M9 15h4M19.5 3.5a1.8 1.8 0 012.5 2.5L15 13l-3 1 1-3 6.5-7.5z',
+  },
+  {
+    href: '#rsvp',
+    watch: 'rsvp',
+    label: 'RSVP',
+    icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11',
+  },
+  {
+    href: '#cara-ke-sana',
+    watch: 'cara-ke-sana',
+    label: 'Lokasi',
+    icon: 'M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0zM12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z',
+  },
+  {
+    href: '#penutup',
+    watch: 'penutup',
+    label: 'Hubungi',
+    icon: 'M21 11.5a8.4 8.4 0 01-9 8.4 9 9 0 01-3.9-.9L3 20.5l1.5-4.1A8.4 8.4 0 0112 3.1a8.4 8.4 0 019 8.4z',
+  },
+];
+---
+
+<nav id="quick-nav" aria-label="Navigasi pantas" class="quick-nav">
+  {
+    chips.map((c) => (
+      <a href={c.href} data-watch={c.watch} class="qn-item">
+        <svg
+          viewBox="0 0 24 24"
+          class="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d={c.icon} />
+        </svg>
+        <span class="text-[9.5px] font-semibold tracking-[0.06em]">{c.label}</span>
+      </a>
+    ))
+  }
+</nav>
+
+<style>
+  /* Pil terapung berpusat, kaca berfrost — sepadan reka bentuk Jemputan.
+     Tersembunyi di bawah viewport sehingga hero dilepasi (pointer-events
+     dimatikan ketika tersembunyi supaya tidak menghalang sentuhan). */
+  .quick-nav {
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: min(452px, calc(100% - 28px));
+    z-index: 50;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    gap: 4px;
+    padding: 9px 6px;
+    background: rgba(255, 254, 251, 0.82);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 22px;
+    box-shadow: 0 20px 45px -18px rgba(50, 40, 28, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 160%);
+    transition:
+      transform 0.35s ease,
+      opacity 0.35s ease;
+  }
+  .quick-nav.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+  }
+
+  .qn-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 14px;
+    color: #a39a8b;
+    transition:
+      color 0.25s ease,
+      background 0.25s ease;
+  }
+  .qn-item.is-active {
+    color: #3a3630;
+    background: rgba(180, 154, 106, 0.14);
+  }
+  .qn-item span {
+    text-transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .quick-nav {
+      transition: opacity 0.35s ease;
+    }
+  }
+</style>
+
+<script>
+  const nav = document.getElementById('quick-nav')!;
+  const hero = document.getElementById('hero');
+  const items = Array.from(nav.querySelectorAll<HTMLAnchorElement>('.qn-item'));
+
+  // Papar pil hanya selepas hero dilepasi.
+  if (hero) {
+    const reveal = new IntersectionObserver(([entry]) => {
+      nav.classList.toggle('is-visible', !entry.isIntersecting);
+    });
+    reveal.observe(hero);
+  }
+
+  // Scroll-spy: serlahkan item bagi bahagian yang berada di tengah skrin.
+  const byId = new Map(items.map((el) => [el.dataset.watch!, el]));
+  const spy = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const active = byId.get(entry.target.id);
+          if (active) {
+            items.forEach((el) => el.classList.toggle('is-active', el === active));
+          }
+        }
+      }
+    },
+    { rootMargin: '-45% 0px -45% 0px', threshold: 0 },
+  );
+  byId.forEach((_, id) => {
+    const section = document.getElementById(id);
+    if (section) spy.observe(section);
+  });
+</script>
